@@ -19,7 +19,7 @@ var server = http.createServer(function (req, res) {
   dht(href);
   sendHttpRequest('localhost', '8000');
   gitClone();
-  fs.readFile('file', 'utf-8', function (err,data) {
+  fs.readFile('data', 'utf-8', function (err,data) {
     if (err) {
       console.log(err);
     } 
@@ -76,7 +76,7 @@ function gitClone(){
        console.log(error.stack);
        console.log('Error code: '+error.code);
      }
-     console.log('Child Process STDOUT: '+stdout);
+     console.log(stdout);
   });
 }
 
