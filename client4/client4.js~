@@ -10,7 +10,7 @@ process.on('message', function(m) {
     seeds: [
       { address: 'localhost', port: 65503 }
     ],
-    storage: levelup('client4/db')
+    storage: levelup('db')
   });
 
   var client = new WebTorrent({ dht: false, tracker: false })
