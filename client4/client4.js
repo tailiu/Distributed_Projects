@@ -13,14 +13,15 @@ process.on('message', function(m) {
     storage: levelup('client4/db')
   });
 
-  var client = new WebTorrent({ dht: false, tracker: false })
+  var client = new WebTorrent({ dht: false, tracker: false });
 
   dht.on('connect', function() {  
     client.seed(m , function (torrent) {
       var meta = {infoHash:torrent.infoHash, port:client.torrentPort};
-      dht.put(m, querystring.stringify(meta), function(err){});
-      console.log(torrent.infoHash) // get info hash
-      console.log(client.torrentPort) // get torrent port
+      var paths = m.split('/');
+      dht.put(paths[paths.length-1], querystring.stringify(meta), function(err){});
+      console.log('>Publish file successfully');
+      process.send('>torrent.infoHash:'+torrent.infoHash + '\n>port:'+ client.torrentPort);
     })
   })
 })
