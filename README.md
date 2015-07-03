@@ -1,2 +1,2 @@
-This is an initial version of the distributed project. There is still much work to do.....
+This is an initial version of the distributed project. It is still being developed.
 
