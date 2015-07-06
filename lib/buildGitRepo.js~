@@ -7,6 +7,7 @@ function buildGitRepo(command){
 /**
  * Build git repo
  */
+ 
 buildGitRepo.prototype.build = function(){
   var ls = childProcess.execFile(this.command, function (error, stdout, stderr) {
      if (error) {

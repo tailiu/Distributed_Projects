@@ -8,7 +8,7 @@ function createHttpServer(){
  * Create Http server to handle get or post request
  * @param {number} port
  * @param {string} method: get or post
- * @param {JSON value or some strings} response
+ * @param {JSON value} response
  *
  */
 createHttpServer.prototype.create = function(port, method, response){
