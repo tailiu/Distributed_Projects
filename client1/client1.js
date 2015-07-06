@@ -4,6 +4,8 @@ var http = require('http');
 var url = require('url');
 var querystring = require('querystring');
 var childProcess = require('child-proc');
+var BuildGitRep = require('../lib/buildGitRepo');
+var CreateHttpServer = require('../lib/createHttpServer');
 
 var dht = kademlia({
   address: '127.0.0.1',
@@ -18,37 +20,11 @@ dht.on('connect', function(){
   dht.put('groupName', 'localhost:6666', function(err){});
 });
 
-function buildGitRepo(){
-  var ls = childProcess.execFile('./instru', function (error, stdout, stderr) {
-     if (error) {
-       console.log(error.stack);
-       console.log('Error code: '+stderr);
-     } 
-     console.log(stdout);
-  });
-}
+var buildGitRepo = new BuildGitRep('./instru');
+var createHttpServer =new CreateHttpServer();
+var data = {gitrepo:"liutai@localhost:/home/liutai/project/client1/git_repo/"};
 
-buildGitRepo();
-
-var server = http.createServer(function (req, res) {
-  var post = '';
-  var data = {gitrepo:"liutai@localhost:/home/liutai/project/client1/git_repo/"};
-  if (req.url === '/favicon.ico') {
-    res.writeHead(200, {'Content-Type': 'image/x-icon'});
-    res.end();
-    return;
-  }
-  req.on('data',function(chunk){  
-    post += chunk;
-  });   
-  req.on('end',function(){  
-    post = querystring.parse(post);
-  });
-  res.writeHead(200,{'Content-Type':'text/plain'});
-  res.write(querystring.stringify(data));
-  res.end();
-});
-
-server.listen(6666);
+buildGitRepo.build();
+createHttpServer.create(6666, 'post', data);
 
 
