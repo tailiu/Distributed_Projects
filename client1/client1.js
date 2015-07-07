@@ -24,7 +24,14 @@ var buildGitRepo = new BuildGitRep('./instru');
 var createHttpServer =new CreateHttpServer();
 var data = {gitrepo:"liutai@localhost:/home/liutai/project/client1/git_repo/"};
 
+function handleReq(){
+}
+
+function generateRes(){
+  return querystring.stringify(data);
+}
+
 buildGitRepo.build();
-createHttpServer.create(6666, 'post', data);
+createHttpServer.create(6666, 'POST', generateRes, handleReq);
 
 
