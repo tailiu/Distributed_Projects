@@ -7,6 +7,8 @@ var childProcess = require('child-proc');
 var fs = require('fs');
 var httpSync = require('http-sync');
 var WebTorrent = require('webtorrent');
+var DownloadFile = require('../lib/downloadFile');
+var SendHttpReq = require('../lib/sendHttpReq');
 
 var dht = kademlia({
   address: '127.0.0.1',
@@ -27,44 +29,11 @@ function gitCommand(gitAddress){
   console.log("Cloning is done");
 }
 
-function sendHttpSyncRequest(ipAddress, port, file){
-  var contents=querystring.stringify({
-    name:'TL',
-    email:'tl67@nyu.edu',
-    option: 'Add group && Git clone',
-    fileName: file
-  });
-  var request = httpSync.request({
-    method: 'POST',
-    headers: {},
-    body: contents,
-    protocol: 'http',
-    host: ipAddress,
-    port: port
-  });
-  var timedout = false;
-  request.setTimeout(1000, function() {
-    console.log("Request Timedout!");
-    timedout = true;
-  });
-  var response = request.end();
-  if (!timedout) {
-    gitCommand(querystring.parse(response.body.toString()).gitrepo);
-    return readFile();
-  }
-}
-
-function downloadFile(meta){
-  var client = new WebTorrent({ dht: false, tracker: false });
-  var ws = fs.createWriteStream('File1.flv');
-  var torrent = client.add(meta.infoHash);
-  torrent.addPeer('127.0.0.1:' + meta.port);
-  client.on('torrent', function (torrent) {
-    torrent.files[0].createReadStream().pipe(ws);
-  })
-  torrent.on('done', function () {
-    console.log('all done!');
-  })
+function handleResponse(response){
+  var gitRepo = querystring.parse(response.body.toString()).gitrepo;
+  console.log(gitRepo);
+  gitCommand(gitRepo);
+  return readFile();
 }
 
 dht.on('connect', function() {
@@ -72,17 +41,24 @@ dht.on('connect', function() {
     var urlObj = url.parse(req.url,true,true);
     var path = urlObj.pathname.substring(1);
     var parts = path.split(':');
+    var sendHttpReq = new SendHttpReq();
+    var req = {
+               name:'TL',
+               email:'tl67@nyu.edu',
+               option: 'Add group && Git clone',
+              }
     if(parts[0] === 'group'){
       dht.get(parts[1], function(err, value) {
-        var val = value.split(':'); 
-        res.end(sendHttpSyncRequest(val[0], val[1]));
+        var val = value.split(':');       
+        res.end(sendHttpReq.sendHttpSyncRequest('POST', val[0], val[1], req, 1000, handleResponse))   
       });
     }
     if(parts[0] === 'file'){
       dht.get(parts[1], function(err, value) {
         var meta = querystring.parse(value);
         console.log(meta);
-        downloadFile(meta);
+        var downloadFile = new DownloadFile();
+        downloadFile.download('/home/liutai/project/Downloaded Files/File1.flv', meta);
         res.writeHead(200,{'Content-Type':'text/plain'});
         res.write('Downloading '+ parts[1]+'...');
         res.end();      
