@@ -11,19 +11,22 @@ var dht = kademlia({
   address: '127.0.0.1',
   port: 65501,
   seeds: [
-    { address: 'localhost', port: 65503 }
+    { address: 'localhost', port: 65503 },
+    { address: 'localhost', port: 65504 }
   ],
   storage: levelup('db')
-});
-
-dht.on('connect', function(){
-  dht.put('groupName', 'localhost:6666', function(err){});
 });
 
 var buildGitRepo = new BuildGitRep('./instru');
 var createHttpServer =new CreateHttpServer();
 var data = {gitrepo:"liutai@localhost:/home/liutai/project/client1/git_repo/"};
-
+var header = {
+              'statusCode': 200, 
+              'statusMessage': 'Return successfully',
+               remainingParts: {
+              'Content-Type': 'text/plain',
+              }};
+               
 function handleReq(){
 }
 
@@ -31,7 +34,12 @@ function generateRes(){
   return querystring.stringify(data);
 }
 
+dht.once('connect', function(){
+  dht.put('groupName', 'localhost:6666', function(err){});
+});
+
 buildGitRepo.build();
-createHttpServer.create(6666, 'POST', generateRes, handleReq);
+createHttpServer.create(6666, 'POST', handleReq, generateRes, header);
+
 
 

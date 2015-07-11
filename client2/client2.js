@@ -1,20 +1,21 @@
 var kademlia = require('kad');
 var levelup = require('level');
-var http = require('http');
-var url = require('url');
 var querystring=require('querystring');
 var childProcess = require('child-proc');
 var fs = require('fs');
 var httpSync = require('http-sync');
 var WebTorrent = require('webtorrent');
+var Fiber = require('fibers');
 var DownloadFile = require('../lib/downloadFile');
 var SendHttpReq = require('../lib/sendHttpReq');
+var CreateHttpServer = require('../lib/createHttpServer');
 
 var dht = kademlia({
   address: '127.0.0.1',
   port: 65502,
   seeds: [
-    { address: 'localhost', port: 65503 }
+    { address: 'localhost', port: 65503 },
+    { address: 'localhost', port: 65504 }
   ],
   storage: levelup('db')
 });
@@ -29,42 +30,62 @@ function gitCommand(gitAddress){
   console.log("Cloning is done");
 }
 
-function handleResponse(response){
+function gitRepoExists(gitRepo){
+  var gitRepoElements = gitRepo.split('/');
+  return fs.existsSync(process.cwd() + '/'+ gitRepoElements[gitRepoElements.length-2]);
+}
+
+function handleHttpSyncResponse(response){
   var gitRepo = querystring.parse(response.body.toString()).gitrepo;
-  console.log(gitRepo);
-  gitCommand(gitRepo);
+  var exist = gitRepoExists(gitRepo);
+  if (!exist)
+    gitCommand(gitRepo);
   return readFile();
 }
 
-dht.on('connect', function() {
-  var server = http.createServer(function (req, res) {
-    var urlObj = url.parse(req.url,true,true);
-    var path = urlObj.pathname.substring(1);
-    var parts = path.split(':');
-    var sendHttpReq = new SendHttpReq();
-    var req = {
-               name:'TL',
-               email:'tl67@nyu.edu',
-               option: 'Add group && Git clone',
-              }
-    if(parts[0] === 'group'){
+function handleReq(urlObj) {
+  var path = urlObj.pathname.substring(1);
+  var parts = path.split(':');
+  var sendHttpReq = new SendHttpReq();
+  var req = {
+             name:'TL',
+             email:'tl67@nyu.edu',
+             option: 'Add group && Git clone'
+            };
+  if(parts[0] === 'group'){
+      var fiber = Fiber.current;
       dht.get(parts[1], function(err, value) {
-        var val = value.split(':');       
-        res.end(sendHttpReq.sendHttpSyncRequest('POST', val[0], val[1], req, 1000, handleResponse))   
+        var val = value.split(':'); 
+        fiber.run(sendHttpReq.sendHttpSyncRequest('POST', 'localhost', '6666', req, 2000, handleHttpSyncResponse));
       });
-    }
-    if(parts[0] === 'file'){
+      return Fiber.yield();
+  }
+  if(parts[0] === 'file'){
       dht.get(parts[1], function(err, value) {
         var meta = querystring.parse(value);
         console.log(meta);
         var downloadFile = new DownloadFile();
-        downloadFile.download('/home/liutai/project/Downloaded Files/File1.flv', meta);
-        res.writeHead(200,{'Content-Type':'text/plain'});
-        res.write('Downloading '+ parts[1]+'...');
-        res.end();      
+        downloadFile.download('/home/liutai/project/Downloaded Files/File1.flv', meta);   
       });
-    } 
-  });
-  server.listen(8080);
+      var str = 'Downloading '+ parts[1]+'...';
+      return str;   
+  } 
+}
+
+function generateRes(request){
+   return request;
+}
+
+dht.once('connect', function() {
+  var createHttpServer = new CreateHttpServer();
+  var header = {
+                'statusCode': 200, 
+                'statusMessage': 'Return successfully',
+                remainingParts:{
+                'Content-Type': 'text/html',
+                }};
+  createHttpServer.create(8080, 'GET', handleReq, generateRes, header);
+  
 })
+
 
