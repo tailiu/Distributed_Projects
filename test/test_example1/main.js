@@ -2,9 +2,11 @@ var cp = require('child_process');
 var dhtSeed1 = cp.fork('DHT_Seed1/seed1.js');
 var dhtSeed2 = cp.fork('DHT_Seed2/seed2.js');
 var publishFile = cp.fork('publish/publish.js');
+var client1 = cp.fork('client1/client1.js');
+var client2 = cp.fork('client2/client2.js');
 var prompt = require('prompt');
 
-var options = ['start dht', 'stop dht', 'publish file'];
+var options = ['start dht', 'stop dht', 'publish file', 'start client1', 'start client2'];
 var helpInfo = 'Distributed Project\n';
 
 process.stdout.write('*****************************\n');
@@ -41,6 +43,12 @@ process.stdin.on('readable', function() {
         console.log(m);
       })
       publishFile.send(filePath);
+    }
+    else if(chunk == options[3] + '\n'){
+      client1.send(options[3]);
+    }
+    else if(chunk == options[4] + '\n'){
+      client2.send(options[4]);
     }
     else
       console.log('>Unknown command');

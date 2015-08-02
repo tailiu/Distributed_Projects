@@ -1,3 +1,4 @@
+cd client1
 mkdir git_repo
 cd git_repo
 git --bare init

@@ -10,6 +10,7 @@ var DownloadFile = require('../../../lib/downloadFile');
 var SendHttpReq = require('../../../lib/sendHttpReq');
 var CreateHttpServer = require('../../../lib/createHttpServer');
 
+process.on('message', function(m) {
 var dht = kademlia({
   address: '127.0.0.1',
   port: 65502,
@@ -17,22 +18,22 @@ var dht = kademlia({
     { address: 'localhost', port: 65503 },
     { address: 'localhost', port: 65504 }
   ],
-  storage: levelup('db')
+  storage: levelup('client2/db')
 });
 
 function readFile(){
-  return fs.readFileSync('git_repo/files.html', 'utf-8');
+  return fs.readFileSync('client2/git_repo/files.html', 'utf-8');
 }
 
 function gitCommand(gitAddress){
-  var command = "git clone " + gitAddress;
+  var command = "cd client2\n" + "git clone " + gitAddress;
   childProcess.execSync(command, {encoding: 'utf8'});
   console.log("Cloning is done");
 }
 
 function gitRepoExists(gitRepo){
   var gitRepoElements = gitRepo.split('/');
-  return fs.existsSync(process.cwd() + '/'+ gitRepoElements[gitRepoElements.length-2]);
+  return fs.existsSync(process.cwd() + '/client2/'+ gitRepoElements[gitRepoElements.length-2]);
 }
 
 function handleHttpSyncResponse(response){
@@ -85,7 +86,7 @@ dht.once('connect', function() {
                 'Content-Type': 'text/html',
                 }};
   createHttpServer.create(8080, 'GET', handleReq, generateRes, header);
-  
 })
 
+});
 
