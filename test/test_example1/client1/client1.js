@@ -7,6 +7,7 @@ var childProcess = require('child-proc');
 var BuildGitRepo = require('../../../lib/buildGitRepo');
 var CreateHttpServer = require('../../../lib/createHttpServer');
 
+process.on('message', function(m) {
 var dht = kademlia({
   address: '127.0.0.1',
   port: 65501,
@@ -14,10 +15,10 @@ var dht = kademlia({
     { address: 'localhost', port: 65503 },
     { address: 'localhost', port: 65504 }
   ],
-  storage: levelup('db')
+  storage: levelup('client1/db')
 });
 
-var buildGitRepo = new BuildGitRepo('./instru');
+var buildGitRepo = new BuildGitRepo('./client1/instru');
 var createHttpServer = new CreateHttpServer();
 var data = {gitrepo:"liutai@localhost:/home/liutai/project/test/test_example1/client1/git_repo/"};
 var header = {
@@ -41,5 +42,5 @@ dht.once('connect', function(){
 buildGitRepo.build();
 createHttpServer.create(6666, 'POST', handleReq, generateRes, header);
 
-
+});
 
