@@ -6,21 +6,29 @@ var crypto = require('crypto');
 var app = express();
 var Schema = mongoose.Schema;
 var userIdSchema = new Schema({
-		_id: 	  	String, 
-		name: 	  	String,
-		email:    	String,
-		password: 	String
-	})
+	_id: 	  	String, 
+	name: 	  	String,
+	email:    	String,
+	password: 	String
+})
 var userIds = mongoose.model('userIds', userIdSchema);
+var commentSchema = new Schema({
+	creator: 	Schema.Types.Mixed,
+	ts: 		{ type: Date, default: new Date() },
+	content: 	String,
+	replyTo: 	String
+})
 var postsSchema = new Schema({
-		ts: 	  	{ type: Date, default: new Date() },
-		creator:    Schema.Types.Mixed,
-		category: 	[],
-		_id: 		String,
-		content:	String,
-		title:      String
-	})
+	ts: 	  	{ type: Date, default: new Date() },
+	creator:    Schema.Types.Mixed,
+	category: 	[],
+	_id: 		String,
+	content:	String,
+	title:      String,
+	comments: 	[commentSchema]
+})
 var posts = mongoose.model('posts', postsSchema);
+var dbAddr = 'mongodb://localhost/simpleForum'
 
 //Create unique _id
 function createRandom() {
@@ -29,11 +37,23 @@ function createRandom() {
 	return crypto.createHash('sha1').update(current_date + random).digest('hex');
 }
 //Send posts back
-function sendPosts() {
-
+function sendPosts(whetherConnect, res, dbAddr, pFilter, pSort, uFilter) {
+	if (!whetherConnect) {
+		mongoose.connect(dbAddr);
+	}
+	posts.find(pFilter).sort(pSort).exec(function (err, data) {
+		if (err) return handleError(err);
+		console.log(data)
+		userIds.find(uFilter, function (err, data1) {
+			if (err) return handleError(err);
+			console.log(data1)
+			mongoose.disconnect();
+			res.render('homepage', {name: data1[0].name, meta: data1, posts: JSON.stringify(data)});
+		})
+	});
 }
 
-app.set('views', './views')
+app.set('views', './views/jade')
 app.set('view engine', 'jade')
 app.use(bodyParser.json());       // to support JSON-encoded bodies
 app.use(bodyParser.urlencoded({     // to support URL-encoded bodies
@@ -48,16 +68,7 @@ app.post('/initial-page', function(req, res) {
     if (op == undefined) {
     	res.render('register');
     } else {
-    	mongoose.connect('mongodb://localhost/simpleForum');	
-		posts.find({}).sort('-ts').exec(function (err, data) {
-			if (err) return handleError(err);
-			//console.log(data)
-			userIds.find({'name': username}, function (err, data1) {
-				if (err) return handleError(err);
-				mongoose.disconnect();
-				res.render('homepage', {name: data1[0].name, meta: data1, posts: JSON.stringify(data)});
-			})
-		})
+		sendPosts(false, res, dbAddr, {}, '-ts', {'name': username});
     }
 });
 
@@ -89,73 +100,33 @@ app.post('/register', function(req, res) {
 	}) 
 });
 
+//Show all the posts
 app.get('/homepage/all', function(req, res) {
 	var user = JSON.parse(req.query.user)[0];
-	console.log(user);
-	mongoose.connect('mongodb://localhost/simpleForum');	
-	posts.find({}).sort('-ts').exec(function (err, data) {
-		if (err) return handleError(err);
-		//console.log(data)
-		userIds.find({'name': user.name}, function (err, data1) {
-			if (err) return handleError(err);
-			mongoose.disconnect();
-			//console.log(data1[0].name)
-			res.render('homepage', {name: data1[0].name, meta: data1, posts: JSON.stringify(data)});
-		})
-	})
+	sendPosts(false, res, dbAddr, {}, '-ts', {'name': user.name});
 });
 
+//Show all the posts with category life
 app.get('/homepage/life', function(req, res) {
 	var user = JSON.parse(req.query.user)[0];
-	//console.log(user);
-	mongoose.connect('mongodb://localhost/simpleForum');	
-	posts.find({'category': 'life'}).sort('-ts').exec(function (err, data) {
-		if (err) return handleError(err);
-		//console.log(data)
-		userIds.find({'name': user.name}, function (err, data1) {
-			if (err) return handleError(err);
-			mongoose.disconnect();
-			//console.log(data1[0].name)
-			res.render('homepage', {name: data1[0].name, meta: data1, posts: JSON.stringify(data)});
-		})
-	})
+	sendPosts(false, res, dbAddr, {'category': 'life'}, '-ts', {'name': user.name});
 });
 
+//Show all the posts with category study
 app.get('/homepage/study', function(req, res) {
 	var user = JSON.parse(req.query.user)[0];
-	//console.log(user);
-	mongoose.connect('mongodb://localhost/simpleForum');	
-	posts.find({'category': 'study'}).sort('-ts').exec(function (err, data) {
-		if (err) return handleError(err);
-		//console.log(data)
-		userIds.find({'name': user.name}, function (err, data1) {
-			if (err) return handleError(err);
-			mongoose.disconnect();
-			//console.log(data1[0].name)
-			res.render('homepage', {name: data1[0].name, meta: data1, posts: JSON.stringify(data)});
-		})
-	})
+	sendPosts(false, res, dbAddr, {'category': 'study'}, '-ts', {'name': user.name});
 });
 
+//Show all the posts with category work
 app.get('/homepage/work', function(req, res) {
 	var user = JSON.parse(req.query.user)[0];
-	//console.log(user);
-	mongoose.connect('mongodb://localhost/simpleForum');	
-	posts.find({'category': 'work'}).sort('-ts').exec(function (err, data) {
-		if (err) return handleError(err);
-		//console.log(data)
-		userIds.find({'name': user.name}, function (err, data1) {
-			if (err) return handleError(err);
-			mongoose.disconnect();
-			//console.log(data1[0].name)
-			res.render('homepage', {name: data1[0].name, meta: data1, posts: JSON.stringify(data)});
-		})
-	})
+	sendPosts(false, res, dbAddr, {'category': 'work'}, '-ts', {'name': user.name});
 });
 
+//Deal with user logout
 app.get('/homepage/logout', function(req, res) {
 	var user = JSON.parse(req.query.user);
-	//console.log(user)
 	res.end("<html> <header> BYE " + user.name + "! </header> </html>")
 });
 
@@ -170,20 +141,34 @@ app.post('/homepage/newPost', function(req, res) {
 		category: 	category,
 		_id: 		createRandom(),
 		content:	content,
-		title:      title
+		title:      title,
+		comments:   []
 	})
 	mongoose.connect('mongodb://localhost/simpleForum');
 	post.save(function (err) {
-	  if (err) return handleError(err);
-	  posts.find({}).sort('-ts').exec(function (err, data) {
-			if (err) return handleError(err);
-			//console.log(data)
-			userIds.find({'name': creator.name}, function (err, data1) {
-				if (err) return handleError(err);
-				mongoose.disconnect();
-				res.render('homepage', {name: data1[0].name, meta: data1, posts: JSON.stringify(data)});
-			})
-		})
+		if (err) return handleError(err);
+		sendPosts(true, res, dbAddr, {}, '-ts', {'name': creator.name});
+	})
+});
+
+//Add new comment to a post
+app.post('/homepage/newComment', function(req, res) {
+	var postID = req.body.postID
+	var user = JSON.parse(req.body.user);
+	var comment = req.body.comment
+	var replyTo = req.body.replyTo
+	var c1 = {creator: user, ts: Date(), content: comment, replyTo: replyTo}
+	//console.log(c1.ts)
+	mongoose.connect('mongodb://localhost/simpleForum');
+	posts.findOne({'_id': postID}, function (err, post) {
+  		if (err) return handleError(err);
+		post.comments.push(c1)
+		//console.log(post)
+		post.save(function (err) {
+			if (err) return handleError(err)
+			//console.log('Success!');
+			sendPosts(true, res, dbAddr, {}, '-ts', {'name': user.name});
+		});
 	})
 });
 
