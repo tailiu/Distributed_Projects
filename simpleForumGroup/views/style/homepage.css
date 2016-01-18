@@ -1,0 +1,62 @@
+a:link {
+    text-decoration: none;
+}
+.section {
+    border-style: solid;
+    border-width: 1px;
+    padding: 10px;
+    overflow:hidden;
+    font: 13px/20px 'Lucida Grande', Tahoma, Verdana, sans-serif;
+    color: #404040;
+    font-size: 13px;
+}
+.commentSection {
+    border-style: solid;
+    border-width: 1px;
+    padding: 15px;
+    overflow:hidden;
+    font: 13px/20px 'Lucida Grande', Tahoma, Verdana, sans-serif;
+    color: #404040;
+    font-size: 12px;
+}
+.commentPostSection {
+    border-style: solid;
+    border-width: 1px;
+    padding: 15px;
+    overflow:hidden;
+    font: 13px/20px 'Lucida Grande', Tahoma, Verdana, sans-serif;
+    color: #404040;
+    font-size: 15px;
+}
+#logoutButton {
+    position: absolute;
+    right: 6px;
+    top: 5px;
+    z-index: 1;
+}
+#header {
+    background-color:black;
+    color:white;
+    text-align:center;
+    padding:5px;
+    height:30%;
+}
+#nav {
+    line-height:50px;
+    background-color:#eeeeee;
+    height:800px;
+    width:20%;
+    float:left;
+    padding:10px;     
+}
+#mainSection {
+    width:75%;
+    float:left;
+    padding:20px;        
+}
+form {
+    display: inline; 
+}
+button {
+    display: inline;
+}
