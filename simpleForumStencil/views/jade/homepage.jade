@@ -1,0 +1,25 @@
+doctype html
+html(lang="en")
+  head
+    title Simple Forum
+    style
+        include ../style/homepage.css
+    script(src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js")
+  body
+    #header
+        h1 Simple Forum
+    #logoutButton
+        button(type="button", onclick="logout()")|logout(#{name})
+    #nav
+    #buttons
+        button(type="button", onclick="newPost()")|New Post
+        button(type="button", onclick="renderCategoryfield()")|Categories
+        button(type="button", onclick="renderGroupConfig()")|Groups
+    #mainSection
+    script 
+        |group =!{group}
+        |page = !{page}
+        |posts =!{posts}
+        |meta =!{meta};
+        include ../script/homepage.js
+        
