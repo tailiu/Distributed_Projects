@@ -11,6 +11,15 @@ a, a:visited{
     color: #404040;
     font-size: 13px;
 }
+.MyGroupSection {
+    border-style: solid;
+    border-width: 1px;
+    padding: 10px;
+    overflow:hidden;
+    font: 13px/20px 'Lucida Grande', Tahoma, Verdana, sans-serif;
+    color: #404040;
+    font-size: 13px;
+}
 .commentSection {
     border-style: solid;
     border-width: 1px;
@@ -48,7 +57,11 @@ a, a:visited{
     height:800px;
     width:20%;
     float:left;
-    padding:10px;     
+    padding:10px;   
+    font-size: 15px;  
+}
+#categoryForm > input.catlinks { 
+    background:none;border:none; 
 }
 #mainSection {
     width:75%;
@@ -58,6 +71,6 @@ a, a:visited{
 form {
     display: inline; 
 }
-button {
+#button {
     display: inline;
 }

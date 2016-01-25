@@ -98,7 +98,7 @@ var fileStencilSchema = new Schema({
 	ts: 			{ type: Date, default: new Date() },
 	_id: 			String,
 	name: 			String,
-	creator: 		String,
+	creator: 		Schema.Types.Mixed,
 	type: 			[],
 	readList: 		[fileUserAccessList],
 	writeList: 		[fileUserAccessList],
@@ -127,12 +127,12 @@ function convertToStencilFiles() {
 				appSpecFileMeta: [],
 				group: 		[]
 			})
-			for (var j=0; j < data[i].comments.length; j++) {
-				oneFile.appSpecFileMeta.push(data[i].comments[j])
-			}
 			oneFile.appSpecFileMeta.push({
 				categories: 	data[i].category
 			})
+			for (var j=0; j < data[i].comments.length; j++) {
+				oneFile.appSpecFileMeta.push(data[i].comments[j])
+			}
 			for (var j=0; j < data[i].group.length; j++) {
 				oneFile.group.push({
 					groupName: 	data[i].group[j].groupName, 

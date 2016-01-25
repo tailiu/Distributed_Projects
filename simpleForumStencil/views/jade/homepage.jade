@@ -14,12 +14,10 @@ html(lang="en")
     #buttons
         button(type="button", onclick="newPost()")|New Post
         button(type="button", onclick="renderCategoryfield()")|Categories
-        button(type="button", onclick="renderGroupConfig()")|Groups
+        button(type="button", onclick="renderGroupConfig()")|Group
     #mainSection
     script 
-        |group =!{group}
-        |page = !{page}
-        |posts =!{posts}
+        |page = !{page};
+        |posts =!{files};
         |meta =!{meta};
         include ../script/homepage.js
-        

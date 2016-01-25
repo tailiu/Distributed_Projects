@@ -4,13 +4,18 @@ html(lang="en")
     title Sign up for Simple Forum
     style
       include ../style/initial.css
-  body.
-    <div class="login">
-      <h1>Sign up</h1>
-      <form method="post" action="http://localhost:3000/register">
-        <p><input type="text" name="username" value="" placeholder="Username"></p>
-        <p><input type="text" name="email" value="" placeholder="Email"></p>
-        <p><input type="password" name="password" value="" placeholder="Password"></p>
-        <p><input type="submit" name="login" value="Submit" ></p>
-      </form>
-    </div>
+    script(src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js")
+  body
+    .login
+      h1 Sign up
+      |<br>
+      form(method="get" id="signupForm")
+            input(type="text" id="username" name="username" value="" placeholder="Username")
+            |<br><br>
+            input(type="text" id="email" name="email" value="" placeholder="Email")
+            |<br><br>
+            input(type="password" id="password" name="password" value="" placeholder="Password")
+            |<br><br>
+            input(type="submit" name="login" value="Submit" class="submitB")
+      script
+            include ../script/register.js
