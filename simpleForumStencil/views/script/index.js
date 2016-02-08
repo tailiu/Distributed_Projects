@@ -14,28 +14,24 @@ $(".submitB").click(function(e1) {
         $("#loginForm").submit(function(event) {
             // Stop form from submitting normally
             event.preventDefault()
-            var url = "http://localhost:3000/file/getFiles"
             var values = $(this).serialize();
             var username = values.split("&")[0].split("=")[1]
             var password = values.split("&")[1].split("=")[1]
             var data = {}
             data.username = username
             data.password = password    
-            getFromStencil(url, data, function(response) {
-                var url1 = "http://localhost:3000/user/getUserInfo"
-                getFromStencil(url1, data, function(response1) {
-                    console.log(response1)
-                    var url2 ="http://localhost:3000/renderWebPage"
-                    var data1 = {
-                        files:      JSON.stringify(response.files),
-                        user:       JSON.stringify(response1.user),
-                        page:       'homepage.jade' 
-                    }
-                    getFromStencil(url2, data1, function(response2) {
-                        document.open("text/html");
-                        document.write(response2.page);
-                        document.close();
-                    })
+            var url1 = "http://localhost:3000/user/getUserInfo"
+            getFromStencil(url1, data, function(response1) {
+                console.log(response1)
+                var url2 ="http://localhost:3000/renderWebPage"
+                var data1 = {
+                    user:       JSON.stringify(response1.user),
+                    page:       'selectGroup.jade' 
+                }
+                getFromStencil(url2, data1, function(response2) {
+                    document.open("text/html");
+                    document.write(response2.page);
+                    document.close();
                 })
             })
         })

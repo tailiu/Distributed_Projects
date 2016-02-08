@@ -60,7 +60,7 @@ a, a:visited{
     padding:10px;   
     font-size: 15px;  
 }
-#categoryForm > input.catlinks { 
+#tagsForm > input.taglinks { 
     background:none;border:none; 
 }
 #mainSection {

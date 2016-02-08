@@ -102,8 +102,7 @@ var fileStencilSchema = new Schema({
 	type: 			[],
 	readList: 		[fileUserAccessList],
 	writeList: 		[fileUserAccessList],
-	appSpecFileMeta: 	[],
-	content: 		String,
+	content: 		[],
 	group: 			[fileGroupSchema]
 })
 var userStencil = conn2.model('userStencil', userStencilSchema)
@@ -123,15 +122,17 @@ function convertToStencilFiles() {
 				type: 		['public'],
 				readList: 	[],
 				writeList: 	[],
-				content: 	data[i].content,
-				appSpecFileMeta: [],
+				content: 	[],
 				group: 		[]
 			})
-			oneFile.appSpecFileMeta.push({
-				categories: 	data[i].category
+			oneFile.content.push({
+				tags: 	data[i].category
+			})
+			oneFile.content.push({
+				content: 	data[i].content
 			})
 			for (var j=0; j < data[i].comments.length; j++) {
-				oneFile.appSpecFileMeta.push(data[i].comments[j])
+				oneFile.content.push(data[i].comments[j])
 			}
 			for (var j=0; j < data[i].group.length; j++) {
 				oneFile.group.push({

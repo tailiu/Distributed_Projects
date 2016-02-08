@@ -13,11 +13,12 @@ html(lang="en")
     #nav
     #buttons
         button(type="button", onclick="newPost()")|New Post
-        button(type="button", onclick="renderCategoryfield()")|Categories
+        button(type="button", onclick="renderTagfield()")|Tags
         button(type="button", onclick="renderGroupConfig()")|Group
     #mainSection
     script 
         |page = !{page};
-        |posts =!{files};
-        |meta =!{meta};
+        |posts = !{files};
+        |meta = !{meta};
+        |groupID = !{groupID};
         include ../script/homepage.js
