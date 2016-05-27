@@ -58,7 +58,7 @@ function sendPages(res, pFilter, pSort, uFilter, type, additionalInfo) {
 	}
 }
 
-//Deal with the initial page
+//Initial page
 app.post('/initial-page', function(req, res) {
     var username = req.body.username
     var password = req.body.password
@@ -70,7 +70,7 @@ app.post('/initial-page', function(req, res) {
     }
 });
 
-//Deal with register and then store new user info in the DB
+//User register
 app.post('/register', function(req, res) {
 	var result
 	var done = false
@@ -83,20 +83,6 @@ app.post('/register', function(req, res) {
 	})
 	deasync.loopWhile(function(){return !done})
 	sendPages(res, {}, '-ts', {'name': username, 'groupID': 'null'}, 'homepage/tags')
-});
-
-//Deal with select group
-app.post('/selectGroup', function(req, res) {
-    var username = req.body.username
-    var groupID = req.body.groupID
-    sendPages(res, {}, '-ts', {'name': username, 'groupID': groupID}, 'homepage/tags')
-});
-
-//Return to the homepage
-app.get('/homepage/home', function(req, res) {
-	var name = req.query.userName
-	var groupID = req.query.groupID
-	sendPages(res, {}, '-ts', {'name': name, 'groupID': groupID}, 'homepage/tags')
 });
 
 //Show all the posts
@@ -127,13 +113,13 @@ app.get('/homepage/work', function(req, res) {
 	sendPages(res, {'tags': 'work'}, '-ts', {'name': name, 'groupID': groupID}, 'homepage/tags')
 });
 
-//Deal with user logout
+//User logout
 app.get('/homepage/logout', function(req, res) {
 	var userName = req.query.user
 	res.end("<html> <header> BYE " + userName + "! </header> </html>")
 });
 
-//Deal with new post
+//New post
 app.post('/homepage/newPost', function(req, res) {
 	var result
 	var done = false
@@ -202,7 +188,7 @@ app.post('/homepage/group/createOneGroup', function(req, res) {
 	sendPages(res, {}, '-ts', {'name': username, 'groupID': groupID}, 
 				'homepage/group/createOneGroup/createGroupSuccessful')
 })
-
+//Join a group
 app.post('/homepage/group/joinOneGroup', function(req, res) {
 	var group
 	var userGroups
@@ -248,7 +234,7 @@ app.post('/homepage/group/joinOneGroup', function(req, res) {
 	sendPages(res, {}, '-ts', {'name': username, 'groupID': groupID}, 
 				'homepage/group/joinOneGroup/JoinGroupSuccessfully')
 })
-
+//Get group Info
 app.post('/homepage/group/getGroupsInfo', function(req, res) {
 	var result
 	var username = req.body.username
@@ -262,7 +248,7 @@ app.post('/homepage/group/getGroupsInfo', function(req, res) {
 	sendPages(res, {}, '-ts', {'name': username, 'groupID': groupID}, 
 				'homepage/group/getGroupsInfo', result)
 })
-
+//Leave one Group
 app.post('/homepage/group/leaveOneGroup', function(req, res) {
 	var group
 	var userGroups
@@ -312,7 +298,7 @@ app.post('/homepage/group/leaveOneGroup', function(req, res) {
 	sendPages(res, {}, '-ts', {'name': username, 'groupID': groupID}, 
 				'homepage/group/leaveOneGroup/LeaveGroupSuccessfully')
 })
-
+//Change current group
 app.post('/homepage/group/changeCurrentGroup', function(req, res){
 	var groupID = req.body.groupID
 	var username = req.body.username
