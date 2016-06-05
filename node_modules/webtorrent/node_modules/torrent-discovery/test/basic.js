@@ -4,36 +4,43 @@ var hat = require('hat')
 var test = require('tape')
 
 test('initialize with dht', function (t) {
+  t.plan(1)
   var dht = new DHT()
   var discovery = new Discovery({
+    infoHash: hat(160),
     peerId: hat(160),
     port: 6000,
     dht: dht
   })
-  discovery.stop(function () {
+  discovery.destroy(function () {
     dht.destroy(function () {
-      t.end()
+      t.pass()
     })
   })
 })
 
 test('initialize with default dht', function (t) {
+  t.plan(1)
   var discovery = new Discovery({
+    infoHash: hat(160),
     peerId: hat(160),
     port: 6000
   })
-  discovery.stop(function () {
-    t.end()
+  discovery.destroy(function () {
+    t.pass()
   })
 })
 
 test('initialize without dht', function (t) {
+  t.plan(2)
   var discovery = new Discovery({
+    infoHash: hat(160),
     peerId: hat(160),
     port: 6000,
     dht: false
   })
-  discovery.stop(function () {
-    t.end()
+  t.equal(discovery.dht, null)
+  discovery.destroy(function () {
+    t.pass()
   })
 })
