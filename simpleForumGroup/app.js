@@ -85,6 +85,20 @@ app.post('/register', function(req, res) {
 	sendPages(res, {}, '-ts', {'name': username, 'groupID': undefined}, 'homepage/tags')
 });
 
+//Deal with select group
+app.post('/selectGroup', function(req, res) {
+    var username = req.body.username
+    var groupID = req.body.groupID
+    sendPages(res, {}, '-ts', {'name': username, 'groupID': groupID}, 'homepage/tags')
+});
+
+//Return to the homepage
+app.get('/homepage/home', function(req, res) {
+	var name = req.query.userName
+	var groupID = req.query.groupID
+	sendPages(res, {}, '-ts', {'name': name, 'groupID': groupID}, 'homepage/tags')
+});
+
 //Show all the posts
 app.get('/homepage/all', function(req, res) {
 	var name = req.query.userName
