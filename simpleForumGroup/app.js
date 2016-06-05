@@ -82,7 +82,7 @@ app.post('/register', function(req, res) {
 		done = true
 	})
 	deasync.loopWhile(function(){return !done})
-	sendPages(res, {}, '-ts', {'name': username, 'groupID': 'null'}, 'homepage/tags')
+	sendPages(res, {}, '-ts', {'name': username, 'groupID': undefined}, 'homepage/tags')
 });
 
 //Show all the posts
