@@ -2,9 +2,15 @@ var express = require('express')
 var querystring = require('querystring')
 var bodyParser = require('body-parser')
 var stencil = require('./stencil')
-var async = require('async')
 var deasync = require('deasync')
 var app = express()
+var childProcess = require('child-proc')
+var os = require('os')
+
+var REORDER = 0
+var ORDER = 1
+var createdGroupsDir = 'created_groups'
+var groupPath = '/homepage/group'
 
 app.set('views', './views/jade')
 app.set('view engine', 'jade')
@@ -13,50 +19,107 @@ app.use(bodyParser.urlencoded({     // to support URL-encoded bodies
 	extended: true
 }))
 
-//Send a dynamic page back
-function sendPages(res, pFilter, pSort, uFilter, type, additionalInfo) {
-	var ffilters = {}
-	if (type == 'selectGroup') {
-		var done = false
-		var result
-		stencil.getUserInfo(uFilter.name, function (response){
-			result = response
-			done = true
+function getAccount() {
+	var account = childProcess.execSync('whoami')
+	account = (account + '').replace(/(\r\n|\n|\r)/gm,"")
+	return account
+}
+
+function sortPosts(posts, sort) {
+	if (sort == REORDER || sort == null) {
+		posts.sort(function (a, b) {
+			c = new Date(a.lastUpadateTs)
+			d = new Date(b.lastUpadateTs)
+			return d-c;
 		})
-		deasync.loopWhile(function(){return !done})
-		res.render('selectGroup', {meta: JSON.stringify(result)})
 	} else {
-		var done1 = false
-		var done2 = false
-		var posts, usermeta
-		if (pFilter.tags == 'all' || pFilter.tags == undefined) {
-	    	ffilters.tags = 'all'
-	    } else {
-	    	ffilters.tags = pFilter.tags
-	    }
-		stencil.getFiles(uFilter.name, uFilter.groupID, ffilters, pSort, function (response){
-			posts = response
-			done1 = true
+		posts.sort(function (a, b) {
+			c = new Date(a.lastUpadateTs)
+			d = new Date(b.lastUpadateTs)
+			return c-d;
 		})
-		deasync.loopWhile(function(){return !done1})
-		stencil.getUserInfo(uFilter.name, function (response){
-			usermeta = response
-			done2 = true
-		})
-		deasync.loopWhile(function(){return !done2})
-		if (type == 'homepage/group/getGroupsInfo') {
-			res.render('homepage', {name: uFilter.name, files: JSON.stringify(posts), meta: JSON.stringify(usermeta),
-						page: JSON.stringify({path: type}), groupID: JSON.stringify({groupID: uFilter.groupID}),
-						additionalInfo: JSON.stringify(additionalInfo)
-			  		})
-			return
+	}
+	return posts
+}
+
+function filterPosts(posts, tag) {
+	var filteredPosts = []
+	for (var i = 0; i < posts.length; i++) {
+		if (posts[i].tags.constructor === Array) {
+			var arr = posts[i].tags
+			if (arr.indexOf(tag) != -1) {
+				filteredPosts.push(posts[i])
+			}
+		} else {
+			if (posts[i].tags == tag) {
+				filteredPosts.push(posts[i])
+			}
 		}
-		res.render('homepage', {name: uFilter.name, files: JSON.stringify(posts), meta: JSON.stringify(usermeta),
-						page: JSON.stringify({path: type}), groupID: JSON.stringify({groupID: uFilter.groupID}),
-						additionalInfo: 'null'
-			  })
+	}
+	return filteredPosts
+}
+
+//Send a dynamic page back
+function sendPages(res, username, groupName, sort, tag, type, additionalInfo) {
+	if (groupName == null) {
+		groupName = 'null'
+	}
+	if (additionalInfo == null) {
+		additionalInfo = 'null'
+	} else {
+		additionalInfo = JSON.stringify(additionalInfo)
+	}
+	if (groupName == 'null') {
+		stencil.getUserInfo(username, function (usermeta) {
+			res.render('homepage', {name: username, posts: JSON.stringify([]), usermeta: usermeta,
+					page: JSON.stringify({path: type}), groupName: groupName,
+					additionalInfo: additionalInfo
+		 	 	})
+		})
+	} else {
+		if (type == 'selectGroup') {
+			res.render('selectGroup', {name: username, groups: JSON.stringify(groupName)})
+		} else {
+			var posts = []
+			if (type.indexOf(groupPath) == -1){
+				var done = false
+				var fileNames = stencil.getFileNamesInGroup(groupName, username)
+				for (var i = 0; i < fileNames.length; i++) {
+					stencil.getFile(fileNames[i], groupName, username, function(val){
+						var value = JSON.parse(val)
+						posts[i] = {}
+						posts[i].name = fileNames[i]
+						posts[i].content = value.content
+						posts[i].lastUpadateTs = value.lastUpadateTs
+						posts[i].tags = value.contentType
+						posts[i].comments = value.comments
+					})
+				}
+				if (tag != null) {
+					posts = filterPosts(posts, tag)
+				}
+				posts = sortPosts(posts, sort)
+			}
+			stencil.getUserInfo(username, function (usermeta) {
+				res.render('homepage', {name: username, posts: JSON.stringify(posts), usermeta: usermeta,
+						page: JSON.stringify({path: type}), groupName: groupName,
+						additionalInfo: additionalInfo
+			 	})
+			})
+		}
 	}
 }
+
+//User register
+app.post('/register', function(req, res) {
+	var username = req.body.username
+	var realName = req.body.realName
+	var email = req.body.email
+	var password = req.body.password
+	stencil.createUser(username, realName, email, password, function() {
+		sendPages(res, username, null, null, null, 'homepage/group', null)
+	})
+});
 
 //Initial page
 app.post('/initial-page', function(req, res) {
@@ -66,106 +129,91 @@ app.post('/initial-page', function(req, res) {
     if (op == undefined) {
     	res.render('register')
     } else {
-		sendPages(res, {}, '-ts', {'name': username}, 'selectGroup')
+    	stencil.getUserInfo(username, function (usermeta) {
+    		if (usermeta == undefined) {
+    			res.end("<html> <header> " + username + " does not exist! </header> </html>")
+    		} else {
+    			var groupName
+	    		var groups = JSON.parse(usermeta).groups
+	    		if (groups.length > 0) {
+	    			groupName = []
+	    			for (var i = 0; i < groups.length; i++) {
+	    				groupName[i] = groups[i].groupName
+	    			}
+	    			sendPages(res, username, groupName, null, null, 'selectGroup', null)
+	    		} else {
+	    			sendPages(res, username, null, null, null, 'homepage/group', null)
+	    		}
+    		}
+		})
     }
-});
-
-//User register
-app.post('/register', function(req, res) {
-	var result
-	var done = false
-	var username = req.body.username
-	var email = req.body.email
-	var password = req.body.password
-	stencil.createUser(username, email, password, function (response){
-		result = response
-		done = true
-	})
-	deasync.loopWhile(function(){return !done})
-	sendPages(res, {}, '-ts', {'name': username, 'groupID': undefined}, 'homepage/tags')
 });
 
 //Deal with select group
 app.post('/selectGroup', function(req, res) {
     var username = req.body.username
-    var groupID = req.body.groupID
-    sendPages(res, {}, '-ts', {'name': username, 'groupID': groupID}, 'homepage/tags')
-});
-
-//Return to the homepage
-app.get('/homepage/home', function(req, res) {
-	var name = req.query.userName
-	var groupID = req.query.groupID
-	sendPages(res, {}, '-ts', {'name': name, 'groupID': groupID}, 'homepage/tags')
+    var groupName = req.body.groupName
+    console.log(groupName)
+    sendPages(res, username, groupName, null, null, 'homepage/tags', null)
 });
 
 //Show all the posts
 app.get('/homepage/all', function(req, res) {
-	var name = req.query.userName
-	var groupID = req.query.groupID
-	sendPages(res, {}, '-ts', {'name': name, 'groupID': groupID}, 'homepage/tags')
+	var username = req.query.username
+	var groupName = req.query.groupName
+	sendPages(res, username, groupName, REORDER, null, 'homepage/tags', null)
 });
 
 //Show all the posts with tage life
 app.get('/homepage/life', function(req, res) {
-	var name = req.query.userName
-	var groupID = req.query.groupID
-	sendPages(res, {'tags': 'life'}, '-ts', {'name': name, 'groupID': groupID}, 'homepage/tags')
+	var username = req.query.username
+	var groupName = req.query.groupName
+	sendPages(res, username, groupName, REORDER, 'life', 'homepage/tags', null)
 });
 
 //Show all the posts with tag study
 app.get('/homepage/study', function(req, res) {
-	var name = req.query.userName
-	var groupID = req.query.groupID
-	sendPages(res, {'tags': 'study'}, '-ts', {'name': name, 'groupID': groupID}, 'homepage/tags')
+	var username = req.query.username
+	var groupName = req.query.groupName
+	sendPages(res, username, groupName, REORDER, 'study', 'homepage/tags', null)
 });
 
 //Show all the posts with tag work
 app.get('/homepage/work', function(req, res) {
-	var name = req.query.userName
-	var groupID = req.query.groupID
-	sendPages(res, {'tags': 'work'}, '-ts', {'name': name, 'groupID': groupID}, 'homepage/tags')
+	var username = req.query.username
+	var groupName = req.query.groupName
+	sendPages(res, username, groupName, REORDER, 'work', 'homepage/tags', null)
+	
 });
 
 //User logout
 app.get('/homepage/logout', function(req, res) {
-	var userName = req.query.user
-	res.end("<html> <header> BYE " + userName + "! </header> </html>")
+	var username = req.query.username
+	res.end("<html> <header> BYE " + username + "! </header> </html>")
 });
 
 //New post
 app.post('/homepage/newPost', function(req, res) {
-	var result
-	var done = false
-	var name = req.body.title
+	var fileName = req.body.title
 	var tag = req.body.tag
 	var content = req.body.content
 	var username = req.body.username
-	var groupID = req.body.groupID
-	console.log(groupID)
-	stencil.createFiles(name, tag, content, username, groupID, function (response){
-		result = response
-		done = true
+	var groupName = req.body.groupName
+	stencil.createFile(username, fileName, groupName, content, tag, function (){
+		sendPages(res, username, groupName, REORDER, null, 'homepage/tags', null)
 	})
-	deasync.loopWhile(function(){return !done})
-	sendPages(res, {}, '-ts', {'name': username, 'groupID': groupID}, 'homepage/tags')
 });
 
 //Add a new comment to a post
 app.post('/homepage/newComment', function(req, res) {
-	var result
-	var done = false
 	var username = req.body.username
 	var replyTo = req.body.replyTo
 	var comment = req.body.comment
-	var postID = req.body.postID
-	var groupID = req.body.groupID
-	stencil.updateFiles(username, replyTo, comment, postID, groupID, function (response){
-		result = response
-		done = true
+	var postName = req.body.postName
+	var groupName = req.body.groupName
+	stencil.updateFile(username, postName, groupName, replyTo, comment, function (){
+		sendPages(res, username, groupName, REORDER, null, 'homepage/tags', null)
 	})
-	deasync.loopWhile(function(){return !done})
-	sendPages(res, {}, '-ts', {'name': username, 'groupID': groupID}, 'homepage/tags')
 });
 
 //Create a group
@@ -174,156 +222,155 @@ app.post('/homepage/group/createOneGroup', function(req, res) {
 	var groupName = req.body.groupName
 	var description = req.body.description
 	var type = req.body.type
-	var groupID = req.body.groupID
-	var done1 = false
-	var done2 = false
-	var done3 = false
-	var group
-	stencil.getGroupInfoByGroupName(groupName, function (response){
-		group = response
-		done1 = true
+	var currentGroupName = req.body.currentGroupName
+	stencil.getGroupInfo(groupName, function (group){
+		if (group != undefined) {
+			sendPages(res, username, groupName, null, null, 
+					'homepage/group/createOneGroup/AlreadyExisted')
+		} else {
+			var networkInterfaces = os.networkInterfaces( )
+			var account = getAccount()
+			var location = account + '@' + networkInterfaces.eth0[0].address + ':' 
+							+ __dirname + '/' + username +'/'+ createdGroupsDir +'/' + groupName
+			stencil.createGroup(username, groupName, description, type, location, function (){
+				sendPages(res, username, currentGroupName, null, null, 
+					'homepage/group/createOneGroup/createGroupSuccessful')
+			})
+		}
 	})
-	deasync.loopWhile(function(){return !done1})
-	if (group != null) {
-		sendPages(res, {}, '-ts', {'name': username, 'groupID': groupID}, 
-				'homepage/group/createOneGroup/AlreadyExisted')
-		return
-	}
-	stencil.createOneGroup(username, groupName, description, type, function (response){
-		result = response
-		done2 = true
-	})
-	deasync.loopWhile(function(){return !done2})
-	stencil.updateUserInfo(username, groupName, 'addOneGroup', function (response){
-		result = response
-		done3 = true
-	})
-	deasync.loopWhile(function(){return !done3})
-	sendPages(res, {}, '-ts', {'name': username, 'groupID': groupID}, 
-				'homepage/group/createOneGroup/createGroupSuccessful')
 })
-//Join a group
-app.post('/homepage/group/joinOneGroup', function(req, res) {
-	var group
-	var userGroups
-	var done1 = false
-	var done2 = false
-	var done3 = false
-	var done4 = false
+
+app.post('/homepage/group/joinOneGroupRes', function(req, res) {
 	var username = req.body.username
-	var groupName = req.body.groupName
-	var groupID = req.body.groupID
-	stencil.getGroupInfoByGroupName(groupName, function (response){
-		group = response
-		done1 = true
+	var pk = req.body.pk
+	var joinGroupName = req.body.groupName
+	var requestHashedHost = req.body.requestHashedHost
+	var response = {}
+	stencil.joinGroupRes(username, joinGroupName, pk, requestHashedHost, function (knownHostsKey, requestHashedHost) {
+		response.resType = 'Accept'
+		response.knownHostsKey = knownHostsKey
+		response.requestHashedHost = requestHashedHost
+		res.write(JSON.stringify(response))
+		res.end()
 	})
-	deasync.loopWhile(function(){return !done1})
-	if (group == null) {
-		sendPages(res, {}, '-ts', {'name': username, 'groupID': groupID}, 
-				'homepage/group/joinOneGroup/GroupNotExisted')
-		return
-	}
-	stencil.getGroupInfoAssociatedWithOneUser(username, function (response){
-		userGroups = response
-		done2 = true
-	})
-	deasync.loopWhile(function(){return !done2})
-	for (var i=0; i<userGroups.length; i++) {
-        if (userGroups[i].name == groupName) {
-            sendPages(res, {}, '-ts', {'name': username, 'groupID': groupID}, 
-				'homepage/group/joinOneGroup/AlreadyInGroup')
-			return
-        }
-    }
-	stencil.joinGroup(username, groupName, function (response){
-		result = response
-		done3 = true
-	})
-	deasync.loopWhile(function(){return !done3})
-	stencil.updateUserInfo(username, groupName, 'addOneGroup', function (response){
-		result = response
-		done4 = true
-	})
-	deasync.loopWhile(function(){return !done4})
-	sendPages(res, {}, '-ts', {'name': username, 'groupID': groupID}, 
-				'homepage/group/joinOneGroup/JoinGroupSuccessfully')
 })
+
+//Join a group
+app.post('/homepage/group/joinOneGroupReq', function(req, res) {
+	var username = req.body.username
+	var currentGroupName = req.body.currentGroupName
+	var joinGroupName = req.body.joinGroupName
+	var joinGroup = true
+	stencil.getGroupInfo(joinGroupName, function (value) {
+		if (value == undefined) {
+			sendPages(res, username, currentGroupName, null, null, 
+					'homepage/group/joinOneGroup/GroupNotExisted')
+		} else {
+			stencil.getUserInfo(username, function (usermeta) {
+				var groups = JSON.parse(usermeta).groups
+				for (var i = 0; i < groups.length; i++) {
+					if (joinGroupName == groups[i].groupName) {
+						joinGroup = false
+						sendPages(res, username, currentGroupName, null, null, 
+							'homepage/group/joinOneGroup/AlreadyInGroup')
+					}
+				}
+				if (joinGroup) {
+					var groupMeta = JSON.parse(value)
+					stencil.joinGroupReq(username, joinGroupName, groupMeta.location, function(result){
+						if (result == 'Accept') {
+							sendPages(res, username, currentGroupName, null, null, 
+								'homepage/group/joinOneGroup/joinGroupSuccessfully')
+						}
+					})
+				}
+			})
+		}
+	})
+})
+
 //Get group Info
 app.post('/homepage/group/getGroupsInfo', function(req, res) {
-	var result
-	var username = req.body.username
-	var groupID = req.body.groupID
-	var done = false
-	stencil.getGroupInfoAssociatedWithOneUser(username, function (response){
-		result = response
-		done = true
-	})
-	deasync.loopWhile(function(){return !done})
-	sendPages(res, {}, '-ts', {'name': username, 'groupID': groupID}, 
-				'homepage/group/getGroupsInfo', result)
-})
-//Leave one Group
-app.post('/homepage/group/leaveOneGroup', function(req, res) {
-	var group
-	var userGroups
-	var done1 = false
-	var done2 = false
-	var done3 = false
-	var done4 = false
-	var inGroup = false
 	var username = req.body.username
 	var groupName = req.body.groupName
-	var groupID = req.body.groupID
-	stencil.getGroupInfoByGroupName(groupName, function (response){
-		group = response
-		done1 = true
+	stencil.getUserInfo(username, function (usermeta) {
+		var groups = JSON.parse(usermeta).groups
+		if (groups.length == null) {
+			sendPages(res, username, groupName, null, null, 
+					'homepage/group/getGroupsInfo', null)
+		} else {
+			var groupsMeta = []
+			var done
+			for (var i = 0; i < groups.length; i++) {
+				done = false
+				stencil.getGroupInfo(groups[i].groupName, function (groupMeta) {
+					groupsMeta[i] = {}
+					groupsMeta[i].name = groups[i].groupName
+					groupsMeta[i].description = JSON.parse(groupMeta).description
+					done = true
+				})
+				deasync.loopWhile(function(){return !done})
+			}
+			sendPages(res, username, groupName, null, null, 
+						'homepage/group/getGroupsInfo', groupsMeta)
+		}
+		
 	})
-	deasync.loopWhile(function(){return !done1})
-	if (group == null) {
-		sendPages(res, {}, '-ts', {'name': username, 'groupID': groupID}, 
-				'homepage/group/leaveOneGroup/GroupNotExisted')
-		return
-	}
-	stencil.getGroupInfoAssociatedWithOneUser(username, function (response){
-		userGroups = response
-		done2 = true
-	})
-	deasync.loopWhile(function(){return !done2})
-	for (var i=0; i<userGroups.length; i++) {
-        if (userGroups[i].name == groupName) {
-            inGroup = true
-        }
-    }
-    if (!inGroup) {
-    	sendPages(res, {}, '-ts', {'name': username, 'groupID': groupID}, 
-				'homepage/group/leaveOneGroup/NotInGroup')
-			return
-    }
-	stencil.leaveOneGroup(username, groupName, function (response){
-		result = response
-		done3 = true
-	})
-	deasync.loopWhile(function(){return !done3})
-	stencil.updateUserInfo(username, groupName, 'deleteOneGroup', function (response){
-		result = response
-		done4 = true
-	})
-	deasync.loopWhile(function(){return !done4})
-	sendPages(res, {}, '-ts', {'name': username, 'groupID': groupID}, 
-				'homepage/group/leaveOneGroup/LeaveGroupSuccessfully')
 })
+
+//Leave one Group
+app.post('/homepage/group/leaveOneGroup', function(req, res) {
+	var username = req.body.username
+	var currentGroupName = req.body.currentGroupName
+	var leaveGroupName = req.body.leaveGroupName
+	var leaveGroup = true
+	stencil.getGroupInfo(leaveGroupName, function (groupMeta) {
+		if (groupMeta == undefined) {
+			leaveGroup = false
+			sendPages(res, username, currentGroupName, null, null, 
+				'homepage/group/leaveOneGroup/GroupNotExisted')
+		}
+		if (leaveGroup) {
+			stencil.getUserInfo(username, function (usermeta) {
+				var groups = JSON.parse(usermeta).groups
+				var inGroup = false
+				for (var i = 0; i < groups.length; i++) {
+					if (leaveGroupName == groups[i].groupName) {
+						inGroup = true
+						break
+					}
+				}
+				if (inGroup) {
+					stencil.leaveGroup(username, leaveGroupName, function () {
+						if (leaveGroupName == currentGroupName) {
+							groupName = null
+						} else {
+							groupName = currentGroupName
+						}
+						sendPages(res, username, groupName, null, null, 
+							'homepage/group/leaveOneGroup/LeaveGroupSuccessfully')
+					})
+				} else {
+					sendPages(res, username, currentGroupName, null, null, 
+						'homepage/group/leaveOneGroup/NotInGroup')
+				}
+			})
+		}
+	})
+})
+
 //Change current group
 app.post('/homepage/group/changeCurrentGroup', function(req, res){
-	var groupID = req.body.groupID
+	var currentGroupName = req.body.currentGroupName
 	var username = req.body.username
-	var selected_groupID = req.body.selected_groupID
-	if (selected_groupID == groupID) {
-		sendPages(res, {}, '-ts', {'name': username, 'groupID': groupID}, 
+	var selected_groupName = req.body.selected_groupName
+	if (selected_groupName == currentGroupName) {
+		sendPages(res, username, currentGroupName, null, null, 
 				'homepage/group/changeCurrentGroup/NoNeedToChange')
-		return
-	}
-	sendPages(res, {}, '-ts', {'name': username, 'groupID': selected_groupID}, 
+	} else {
+		sendPages(res, username, selected_groupName, null, null, 
 				'homepage/group/changeCurrentGroup/ChangeGroupSuccessfully')
+	}
 })
 
 //Create server listening on port 3000 at localhost

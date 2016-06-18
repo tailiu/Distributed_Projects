@@ -12,14 +12,15 @@ html(lang="en")
         button(type="button", onclick="logout()")|logout(#{name})
     #nav
     #buttons
-        button(type="button", onclick="newPost()")|New Post
-        button(type="button", onclick="renderTagfield()")|Tags
+        button(type="button", id="newPost", onclick="newPost()")|New Post
+        button(type="button", id="tags", onclick="renderTagfield()")|Tags
         button(type="button", onclick="renderGroupConfig()")|Group
     #mainSection
-    script 
+    script
+        |username = !{name};
+        |usermeta = !{usermeta};
         |page = !{page};
-        |posts = !{files};
-        |meta = !{meta};
-        |groupID = !{groupID};
+        |posts = !{posts};
+        |groupName = !{groupName};
         |additionalInfo = !{additionalInfo};
         include ../script/homepage.js
