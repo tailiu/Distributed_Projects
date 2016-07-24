@@ -1,0 +1,28 @@
+doctype html
+html(lang="en")
+  head
+    title Stencil Slack
+    style
+        include ../style/homepage.css
+    script(src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js")
+  body
+    #header
+        h1 Stencil Slack
+    #logoutButton
+        button(type="button", onclick="logout()")|logout(#{username})
+    #nav
+    #buttons
+        button(type="button", id="newPost", onclick="newPost()")|New Channel
+        button(type="button", id="channels", onclick="getChannels()")|Channels
+        button(type="button", onclick="renderTeamConfig()")|Team
+    #mainSection
+    script
+        |username = !{username};
+        |email = !{email};
+        |page = !{page};
+        |channels = !{channels};
+        |readableTeamName = !{readableTeamName};
+        |flatTeamName = !{flatTeamName};
+        |msgs = !{msgs};
+        |chosenChannel = !{chosenChannel};
+        include ../script/homepage.js
