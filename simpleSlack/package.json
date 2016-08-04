@@ -1,12 +1,13 @@
 {
-  "name": "simpleforum",
+  "name": "stencil-slack",
   "version": "1.0.0",
-  "description": "A simple forum",
+  "description": "Slack app uses Stencil storage system",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "init": "bash init.sh & rm -r -f db1 db2 db3 db4 & node update_admin.js"
   },
-  "author": "",
+  "author": "Tai Liu",
   "license": "ISC",
   "dependencies": {
     "body-parser": "^1.14.2",

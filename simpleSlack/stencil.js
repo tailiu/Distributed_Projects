@@ -8,14 +8,13 @@ var os = require('os')
 var request = require('request')
 var lineByLine = require('n-readlines')
 var mkdirp = require('mkdirp')
+var _ = require('underscore')
 
 const listeningPort = 3000
 const userDHTSeedPort = 8100
 const userDHTPort = 7100
 const groupDHTSeedPort = 8200
 const groupDHTPort = 7200
-const fileDHTSeedPort = 8300
-const fileDHTPort = 7300
 
 var adminFile = 'gitolite-admin'
 var confDir = '/gitolite-admin/conf/'
@@ -46,11 +45,6 @@ var groupDHTSeed = {
 	port: groupDHTSeedPort
 }
 
-var fileDHTSeed = {
-	address: '127.0.0.1',
-	port: fileDHTSeedPort
-}
-
 //create local user DHT node
 var userDHT = new kad.Node({
   transport: kad.transports.UDP(kad.contacts.AddressPortContact({
@@ -67,14 +61,6 @@ var groupDHT = new kad.Node({
 	port: groupDHTPort
   })),
   storage: kad.storage.FS('db4')
-})
-
-var fileDHT = new kad.Node({
-  transport: kad.transports.UDP(kad.contacts.AddressPortContact({
-	address: '127.0.0.1',
-	port: fileDHTPort
-  })),
-  storage: kad.storage.FS('db6')
 })
 
 //find current account on the machine
@@ -108,8 +94,6 @@ function getIpAddrFromLocation(location) {
   var parts1 = parts[1].split(':')
   return parts1[0]
 } 
-
-
 
 //add key to known_hosts file in .ssh dir
 function addKeyToKnownHosts(key) {
@@ -160,12 +144,21 @@ function getLocalIpAddr() {
 	return networkInterfaces.eth0[0].address
 }
 
-exports.createUser = function (userID, location, publicKey, callback) {
+function getSignature(value, privateKey) {
+	var sign = crypto.createSign('SHA256')
+	sign.update(value)
+	sign.end()
+	return sign.sign(privateKey, 'hex')
+}
+
+exports.createUser = function (userID, privateKey, publicKey, callback) {
 	var usermeta = {}
 	usermeta.ts = new Date()
-	usermeta.location = location
+	usermeta.groups = []
 	usermeta.publicKey = publicKey
-	usermeta.groups = [] 
+
+	usermeta.signature = getSignature(JSON.stringify(usermeta), privateKey)
+	
 	userDHT.connect(userDHTSeed, function(err) {
 		userDHT.put(userID, usermeta, function() {
 		  	callback(usermeta)
@@ -175,77 +168,39 @@ exports.createUser = function (userID, location, publicKey, callback) {
 
 exports.getUserInfo = function (userID, callback) {
 	userDHT.connect(userDHTSeed, function(err) {
-		userDHT.get(userID, function(err, value){
+		userDHT.get(userID, function(err, value) {
 			callback(value)
 		})
 	})
 }
 
-exports.updateUserInfo = function (userID, usermeta, changedContent, option, callback) {
+function updateUserInfo (userID, usermeta, changedContent, option, privateKey, callback) {
 	if (option == 'add group') {
 		usermeta.groups.push(changedContent)
 	}
+	delete usermeta['signature']
+	usermeta.signature = getSignature(JSON.stringify(usermeta), privateKey)
 	userDHT.put(userID, usermeta, function() {
 		callback()
 	})
 }
 
-exports.getFilemeta = function (fileName, groupName, userID) {
-	var repoName = getRepoNameFromGroupName(groupName)
-	var filemetaDir = getFilemetaDir(userID, repoName)
-	var command = 'cd ' + filemetaDir + '\ngit branch\n'
-	var result = childProcess.execSync(command)
-	if (result == '') {
-		return undefined
-	}
-	var command1 = 'cd ' + filemetaDir + '\ngit pull origin master\n'
-	childProcess.execSync(command1)
-	var filemetaPath = getFilemetaPath(filemetaDir, fileName)
-	if (!fs.existsSync(filemetaPath)) {
-		return undefined
-	}
-	return fs.readFileSync(filemetaPath, 'utf8')
-}
-
-
-
-exports.putOnFileDHT = function(fileID, content, callback) {
-	fileDHT.connect(fileDHTSeed, function(err) {
-		fileDHT.put(fileID, content, function() {
-		  	callback()
-		})
-	})
-}
-
-exports.getFromFileDHT = function(fileID, callback) {
-	fileDHT.connect(fileDHTSeed, function(err) {
-		fileDHT.get(fileID, function(err, value){
-			callback(value)
-		})
-	})
+exports.updateUserInfo = function (userID, usermeta, changedContent, option, privateKey, callback) {
+	updateUserInfo(userID, usermeta, changedContent, option, privateKey, callback)
 }
 
 exports.syncFile = function(userID, groupName, callback) {
-	try {
+	
+	var repoName = getRepoNameFromGroupName(groupName)
+	var filemetaDir = getFilemetaDir(userID, repoName)
+	var command = 'cd ' + filemetaDir + '\ngit pull origin master\n'
+	var result = childProcess.execSync(command)
 
-		var repoName = getRepoNameFromGroupName(groupName)
-		var filemetaDir = getFilemetaDir(userID, repoName)
-		var command = 'cd ' + filemetaDir + '\ngit pull origin master\n'
-		childProcess.execSync(command)
-
-		callback()
-
-	} catch(err) {
-
-		var errMsg = err.stderr.toString()
-
-		if (errMsg.indexOf("Couldn't find remote ref master") != -1 ) {
-			callback()
-		} else {
-			conflictsResolution(err, filemetaDir, '', 'additionalFilesAddedToRepoOrFallBehind', callback)
-		}
-		
-	} 
+	if (result.toString().indexOf('Already up-to-date') != -1) {
+		callback(false)
+	} else {
+		callback(true)
+	}
 	
 }
 
@@ -294,7 +249,6 @@ function getFilemetaDirFromFilemetaPath(path, fileName) {
 }
 
 function resolveConflictsInOneFile(conflictsInfo, filemetaDir, fileName, callback) {
-
 	try {
 
 		var command = 'cd ' + filemetaDir + '\ngit pull origin master\n'
@@ -335,22 +289,12 @@ function resolveConflictsInOneFile(conflictsInfo, filemetaDir, fileName, callbac
 		})
 
 	}
-	
-
 }
 
 function conflictsResolution(conflictsInfo, filemetaDir, fileName, type, callback) {
 	if (type == 'conflictsInOneFile') {
-
 		resolveConflictsInOneFile(conflictsInfo, filemetaDir, fileName, callback)
-
-	} else if (type == 'additionalFilesAddedToRepoOrFallBehind') {
-
-		var command = 'cd '+ filemetaDir + '\ngit pull origin master\ngit push origin master\n'
-		childProcess.execSync(command)
-
-		callback()
-	}
+	} 
 }
 
 function pushToGitRepo(filemetaDir, fileName, comment, callback) {
@@ -359,9 +303,7 @@ function pushToGitRepo(filemetaDir, fileName, comment, callback) {
 		var command = 'cd '+ filemetaDir + '\ngit add ' +  fileName 
 				+ '\ngit commit -m "' + comment + '"\ngit push origin master\n'
 		childProcess.execSync(command)
-
 		var retry = false
-
 		callback(retry)
 
 	} catch (err) {
@@ -369,6 +311,39 @@ function pushToGitRepo(filemetaDir, fileName, comment, callback) {
 		conflictsResolution(err, filemetaDir, fileName, 'conflictsInOneFile', callback)
 
 	} 
+}
+
+exports.getFileInRepo = function (fileName, groupName, userID) {
+	var repoName = getRepoNameFromGroupName(groupName)
+	var filemetaDir = getFilemetaDir(userID, repoName)
+	var command = 'cd ' + filemetaDir + '\ngit branch\n'
+	var result = childProcess.execSync(command)
+	if (result == '') {
+		return undefined
+	}
+	var command1 = 'cd ' + filemetaDir + '\ngit pull origin master\n'
+	childProcess.execSync(command1)
+	var filemetaPath = getFilemetaPath(filemetaDir, fileName)
+	if (!fs.existsSync(filemetaPath)) {
+		return undefined
+	}
+	return fs.readFileSync(filemetaPath, 'utf8')
+}
+
+exports.createOrUpdateFileInRepo = function(userID, relativeFilemetaPath, groupName, content, option, callback) {
+	var fileName = getFileNameFromFilemetaPath(relativeFilemetaPath)
+	var relativeFilemetaDir = getFilemetaDirFromFilemetaPath(relativeFilemetaPath, fileName)
+	
+	var repoName = getRepoNameFromGroupName(groupName)
+	var fileDir = getFilemetaDir(userID, repoName + '/' + relativeFilemetaDir)
+	var filePath = getFilemetaPath(fileDir, fileName)
+	
+	mkdirp.sync(fileDir)
+
+	fs.writeFile(filePath, content, function(err) {
+		var comment = option + ' file ' + fileName
+		pushToGitRepo(fileDir, fileName, comment, callback)
+	})
 }
 
 function createTmpFile(userID, content) {
@@ -385,7 +360,7 @@ function createTmpFile(userID, content) {
 	return filePath
 }
 
-exports.createOrUpdateFile = function(userID, relativeFilemetaPath, groupName, content, option, callback) {
+exports.createOrUpdateFileInTorrent = function(userID, relativeFilemetaPath, groupName, content, option, callback) {
 	var filemeta = {}
 	var filePath
 	var torrent = new WebTorrent({ dht: false, tracker: false })
@@ -421,7 +396,7 @@ exports.createOrUpdateFile = function(userID, relativeFilemetaPath, groupName, c
 	
 }
 
-exports.getFile = function (relativeFilemetaPath, groupName, userID, callback) {
+exports.getFileFromTorrent = function (relativeFilemetaPath, groupName, userID, callback) {
 	var fileName = getFileNameFromFilemetaPath(relativeFilemetaPath)
 	var relativeFilemetaDir = getFilemetaDirFromFilemetaPath(relativeFilemetaPath, fileName)
 
@@ -474,72 +449,77 @@ function cloneRepo(repoLocation, dir) {
 	childProcess.execSync(command)
 }
 
-function addGroupToUsermeta(usermeta, groupName, status) {
-	var n = usermeta.groups.length
-	usermeta.groups[n] = {}
-	usermeta.groups[n].groupName = groupName
-	usermeta.groups[n].status = status
-	return usermeta
-}
-
 //use the unique label in the group name as the repo name
 function getRepoNameFromGroupName(groupName) {
 	return groupName.split(':')[2]
 }
 
+function calculateHash(value) {
+	var hash = crypto.createHash('sha256')
+	hash.update(value)
+	return hash.digest('hex')
+}
+
 exports.createGroup = function (meta, callback) {
-	var email = meta.email
+	var creatorPublicKey = meta.creatorPublicKey
+	var creatorPrivateKey = meta.creatorPrivateKey
 	var groupName = meta.groupName
 	var serverAddr = meta.serverAddr
-	var dir = email + '/' + createdGroupsDir + '/' + serverAddr
+
+	var hashedPublicKey = calculateHash(creatorPublicKey)
+	var dir = hashedPublicKey + '/' + createdGroupsDir + '/' + serverAddr
 	var adminLocation = serverAddr + ':' + adminFile
 	var adminFilePath = dir + '/' + adminFile
 
-	if (!fs.existsSync(email)) {
-		childProcess.execSync('mkdir ' + email)
-	}
-	if (!fs.existsSync(email + '/' + createdGroupsDir)) {
-		childProcess.execSync('cd ' + email + '\nmkdir ' + createdGroupsDir + '\n')
-	}
-	if (!fs.existsSync(dir)) {
-		childProcess.execSync('cd ' + email + '\ncd ' + createdGroupsDir + '\nmkdir ' + serverAddr + '\n')
-	}
-	if (!fs.existsSync(adminFilePath)) {
-		cloneRepo(adminLocation, dir)
-	}
+	mkdirp.sync(dir)
+
 	userDHT.connect(userDHTSeed, function(err) {
-		userDHT.get(email, function(err, usermeta) {
-			usermeta = addGroupToUsermeta(usermeta, groupName, 'in')
-			userDHT.put(email, usermeta, function() {
-				groupDHT.connect(groupDHTSeed, function(err) {
-					var groupMeta = {}
-					var repoName = getRepoNameFromGroupName(groupName)
-					var dir1 = email + '/' + joinedGroupsDir + '/'
-					var repoLocation = serverAddr + ':' + repoName
-					groupMeta.groupMems = []
-					groupMeta.groupMems[0] = {}
-					groupMeta.groupMems[0].username = meta.username
-					groupMeta.groupMems[0].email = meta.email
-					groupMeta.groupMems[0].role = []
-					groupMeta.groupMems[0].role[0] = 'creator'
-					groupMeta.description = meta.description
-					groupMeta.groupType = meta.groupType
-					groupMeta.ts = new Date()
-					groupMeta.content = {}
-					groupMeta.content.type = meta.type
-					groupMeta.content.teamName = meta.teamName
-					groupMeta.content.name = meta.name
-					if (!fs.existsSync(email + '/' + joinedGroupsDir)) {
-						childProcess.execSync('cd ' + email + '\nmkdir ' + joinedGroupsDir + '\n')
-					}
-					changePulicKeyFileName(dir, email)
-					addRepo(repoName, dir + confDir + confFile, email, dir + confDir)
-					cloneRepo(repoLocation, dir1)
-					groupDHT.put(groupName, groupMeta, function(){
-						callback()
+		userDHT.get(hashedPublicKey, function(err, usermeta) {
+			if (err != null) {
+				callback(err)
+			} else {
+				if (!fs.existsSync(adminFilePath)) {
+					cloneRepo(adminLocation, dir)
+				}
+
+				var changedContent = {}
+				changedContent.groupName = groupName
+				changedContent.status = 'in'
+
+				updateUserInfo(hashedPublicKey, usermeta, changedContent, 'add group', creatorPrivateKey, function() {
+
+					groupDHT.connect(groupDHTSeed, function(err) {
+						var groupMeta = {}
+						var repoName = getRepoNameFromGroupName(groupName)
+						var dir1 = hashedPublicKey + '/' + joinedGroupsDir + '/'
+						var repoLocation = serverAddr + ':' + repoName
+						groupMeta.groupMems = []
+						groupMeta.groupMems[0] = {}
+						groupMeta.groupMems[0].username = meta.username
+						groupMeta.groupMems[0].hashedPublicKey = hashedPublicKey
+						groupMeta.groupMems[0].role = []
+						groupMeta.groupMems[0].role[0] = 'creator'
+						groupMeta.description = meta.description
+						groupMeta.groupType = meta.groupType
+						groupMeta.ts = new Date()
+						groupMeta.content = {}
+						groupMeta.content.type = meta.type
+						groupMeta.content.teamName = meta.teamName
+						groupMeta.content.name = meta.name
+						groupMeta.signature = getSignature(JSON.stringify(groupMeta), meta.privateKey)
+
+						if (!fs.existsSync(hashedPublicKey + '/' + joinedGroupsDir)) {
+							mkdirp.sync(hashedPublicKey + '/' + joinedGroupsDir)
+						}
+						changePulicKeyFileName(dir, hashedPublicKey)
+						addRepo(repoName, dir + confDir + confFile, hashedPublicKey, dir + confDir)
+						cloneRepo(repoLocation, dir1)
+						groupDHT.put(groupName, groupMeta, function(){
+							callback()
+						})
 					})
 				})
-			})
+			}
 		})
 	})
 }
@@ -575,6 +555,15 @@ function addKey(path, key, userID) {
 	if (fs.existsSync(keyFilePath)) {
 		return
 	}
+
+	//This is just a temporary method for the test on the local machine
+	//Try to avoid adding ssh public key to gitolite-admin keydir twice on the local machine
+	var command = 'cat ' + SSHPkPath
+	var SSHPublicKey = childProcess.execSync(command)
+	if (SSHPublicKey == key) {
+		return
+	}
+
 	fs.writeFileSync(keyFilePath, key)
 }
 
@@ -642,26 +631,24 @@ function getLocalServerDir(userID, serverRepoAddr) {
 	return path
 }
 
-exports.updateGroupInfo = function (userID, groupName, changedContent, key, option, callback) {
-	if (option == 'add') {
+exports.updateGroupInfo = function (userID, groupName, changedContent, option, newGroupmeta, callback) {
+	if (option == 'add user') {
 		groupDHT.connect(groupDHTSeed, function(err) {
-			groupDHT.get(groupName, function(err, groupmeta){
-				groupmeta.groupMems.push(changedContent)
-				groupDHT.put(groupName, groupmeta, function() {
+		
+			groupDHT.put(groupName, newGroupmeta, function() {
 
-					var repoName = getRepoNameFromGroupName(groupName)
-					var path = getServerRepoAddr(userID, repoName)
-					var localServerDir = getLocalServerDir(userID, path)
+				var repoName = getRepoNameFromGroupName(groupName)
+				var path = getServerRepoAddr(userID, repoName)
+				var localServerDir = getLocalServerDir(userID, path)
 
-					addKey(localServerDir, key, changedContent.email)
-					updateConfig(localServerDir, repoName, changedContent.email)
+				addKey(localServerDir, changedContent.SSHPublicKey, changedContent.hashedPublicKey)
+				updateConfig(localServerDir, repoName, changedContent.hashedPublicKey)
 
-					var serverAddr = getServerAddr(path)
-					var knownHostKey = getKnownHostKey(serverAddr)
+				var serverAddr = getServerAddr(path)
+				var knownHostKey = getKnownHostKey(serverAddr)
 
-					callback(path, knownHostKey)
+				callback(path, knownHostKey)
 
-				})
 			})
 		})
 	}

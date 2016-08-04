@@ -12,13 +12,13 @@ html(lang="en")
         button(type="button", onclick="logout()")|logout(#{username})
     #nav
     #buttons
-        button(type="button", id="newPost", onclick="newPost()")|New Channel
+        button(type="button", id="newChannelID", onclick="newChannel()")|New Channel
         button(type="button", id="channels", onclick="getChannels()")|Channels
         button(type="button", onclick="renderTeamConfig()")|Team
     #mainSection
     script
         |username = !{username};
-        |email = !{email};
+        |hashedPublicKey = !{hashedPublicKey};
         |page = !{page};
         |channels = !{channels};
         |readableTeamName = !{readableTeamName};

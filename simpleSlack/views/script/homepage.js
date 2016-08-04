@@ -1,3 +1,5 @@
+var refreshInterval = 2000
+
 function notInAnyGroup() {
     document.getElementById("tags").disabled = true
     document.getElementById("newPost").disabled = true
@@ -24,7 +26,7 @@ function renderPosts(posts) {
 function getChannels() {
     var getChannelsForm = '<form action="http://localhost:3000/getChannels" method="post">'
     getChannelsForm += '<input type="hidden" name="username" value="'+ username +'">'
-    getChannelsForm += '<input type="hidden" name="email" value="'+ email +'">'
+    getChannelsForm += '<input type="hidden" name="hashedPublicKey" value="'+ hashedPublicKey +'">'
     getChannelsForm += '<input type="hidden" name="flatTeamName" value="'+ flatTeamName +'">'
     getChannelsForm += '<input type="hidden" name="readableTeamName" value="'+ readableTeamName +'">'
     getChannelsForm += '<input type="submit" name="submit" value="submit" style="display:none" id="getChannelsButton"></form>'
@@ -64,22 +66,9 @@ function renderComments(post) {
     }
 }
 
-function newPost() {
-    var newPostForm = '<form action="http://localhost:3000/homepage/newPost" method="post" id="nPost">'
-    newPostForm += 'Title: <input type="text" name="title"><br>'
-    newPostForm += '<input type="hidden" name="username" value="'+ username +'">'
-    newPostForm += '<input type="hidden" name="groupName" value="'+ groupName +'">'
-    newPostForm += 'Tags:<br>'
-    newPostForm += '<input type="checkbox" name="tag" value="life"> Life <br>'
-    newPostForm += '<input type="checkbox" name="tag" value="study"> Study <br>'
-    newPostForm += '<input type="checkbox" name="tag" value="work"> Work <br>'
-    newPostForm += '<textarea rows="6" cols="50" name="content" form="nPost"></textarea><br>'
-    newPostForm += "<input type='submit' name='post' value='Submit' class='postButtons' ></form>"
-    document.getElementById("mainSection").innerHTML = newPostForm
-}
 function logout() {
     if (confirm("Are you sure to leave?") == true) {
-        window.location.href = "http://localhost:3000/homepage/logout?username=" + username
+        window.location.href = "http://localhost:3000/logout?username=" + username
     }
 }
 function NoSuchGroup(option) {
@@ -255,10 +244,26 @@ $(document).on('click', '.section', function() {
 
 
 
+function newChannel() {
+    var newChannelForm = '<form action="http://localhost:3000/newChannel" method="post" id="newChannel">'
+    newChannelForm += 'Name: <input type="text" name="channelName"><br><br>'
+    newChannelForm += "<input type='hidden' name='hashedPublicKey' value=" + hashedPublicKey + ">"
+    newChannelForm += "<input type='hidden' name='flatTeamName' value="+ flatTeamName +">"
+    newChannelForm += "<input type='hidden' name='readableTeamName' value="+ readableTeamName +">"
+    newChannelForm += "<input type='hidden' name='username' value="+ username +">"
+    newChannelForm += 'Type of Channel:<br>'
+    newChannelForm += '<input type="radio" name="type" value="private">Public<br>'
+    newChannelForm += '<input type="radio" name="type" value="public">Private<br><br>'
+    newChannelForm += 'Purpose:<br>'
+    newChannelForm += '<textarea rows="6" cols="50" name="purpose" form="newChannel"></textarea><br>'
+    newChannelForm += "<input type='submit' name='createChannelButton' value='Create Channel' ></form>"
+    document.getElementById("mainSection").innerHTML = newChannelForm
+}
+
 $(document).on('click', '#inviteOthers', function() {
     var invitationForm = "<h3>Invite Others to Team</h3><br>"
     invitationForm += "<form action='http://localhost:3000/invite' method='post'>"
-    invitationForm += "<input type='hidden' name='inviterEmail' value=" + email + ">"
+    invitationForm += "<input type='hidden' name='hashedPublicKey' value=" + hashedPublicKey + ">"
     invitationForm += "<input type='hidden' name='flatTeamName' value="+ flatTeamName +">"
     invitationForm += "<input type='hidden' name='readableTeamName' value="+ readableTeamName +">"
     invitationForm += "<input type='hidden' name='username' value="+ username +">"
@@ -269,7 +274,7 @@ $(document).on('click', '#inviteOthers', function() {
 })
 function renderChannels() {
     var ch = ''
-    var para = 'email=' + email + '&&username=' + username + '&&readableTeamName=' + readableTeamName + '&&flatTeamName=' + flatTeamName
+    var para = 'hashedPublicKey=' + hashedPublicKey + '&&username=' + username + '&&readableTeamName=' + readableTeamName + '&&flatTeamName=' + flatTeamName
     for (var i in channels) {
         ch += '<a href="http://localhost:3000/renderChannel?' + para + '&&flatCName=' + channels[i].flatName + '\">' + channels[i].readableName + '</a><br>'
     }
@@ -278,31 +283,24 @@ function renderChannels() {
 
 function autoScrolling() {
     var chatemt = document.getElementById("chatbox");
-
     var scrollHeight = chatemt.scrollHeight //Scroll height after the request
-
     $("#chatbox").animate({ scrollTop: scrollHeight }, 0.01) //Autoscroll to bottom of chatbox
 
 }
 
 function renderChatMsgs() {
-
     var chatMsgs = ''
-
     for (var i in msgs) {
-        chatMsgs +=  '<p>' + msgs[i].creator + ' on ' + msgs[i].ts + ' wrote:</p>'
+        chatMsgs +=  '<p>' + username + ' on ' + msgs[i].ts + ' wrote:</p>'
         chatMsgs +=  '  <p>' + msgs[i].msg + '</p><br>'
     }
-    
     document.getElementById("chatbox").innerHTML = chatMsgs
-
+    
     autoScrolling()
-
 }
 
 function renderChatbox() {
     var chatbox = ''
-
 
     chatbox += '<div id="wrapper">'
 
@@ -316,7 +314,7 @@ function renderChatbox() {
     chatbox +=      '<div id="chatbox"></div>'
 
     chatbox +=      '<form action="http://localhost:3000/userMsg" method="post" >'
-    chatbox +=          '<input type="hidden" name="email" value=' + email + '>'
+    chatbox +=          '<input type="hidden" name="hashedPublicKey" value=' + hashedPublicKey + '>'
     chatbox +=          '<input type="hidden" name="flatTeamName" value='+ flatTeamName + '>'
     chatbox +=          '<input type="hidden" name="readableTeamName" value='+ readableTeamName +'>'
     chatbox +=          '<input type="hidden" name="username" value='+ username +'>'
@@ -333,7 +331,7 @@ function renderChatbox() {
 
 function sendRefreshReq() {
     var req = {}
-    req.email = email
+    req.hashedPublicKey = hashedPublicKey
     req.flatTeamName = flatTeamName
     req.chosenChannel = chosenChannel
 
@@ -351,7 +349,7 @@ function sendRefreshReq() {
 }
 
 function refresh() {
-    setInterval(function(){ sendRefreshReq() }, 2000)
+    setInterval(function(){ sendRefreshReq() }, refreshInterval)
 }
 
 function start() {
