@@ -313,29 +313,29 @@ function pushToGitRepo(filemetaDir, fileName, comment, callback) {
 	} 
 }
 
-exports.getFileInRepo = function (fileName, groupName, userID) {
+exports.getFileInRepo = function (relativeFilePath, groupName, userID) {
 	var repoName = getRepoNameFromGroupName(groupName)
-	var filemetaDir = getFilemetaDir(userID, repoName)
-	var command = 'cd ' + filemetaDir + '\ngit branch\n'
+	var fileRepo = getFilemetaDir(userID, repoName)
+	var command = 'cd ' + fileRepo + '\ngit branch\n'
 	var result = childProcess.execSync(command)
 	if (result == '') {
 		return undefined
 	}
-	var command1 = 'cd ' + filemetaDir + '\ngit pull origin master\n'
+	var command1 = 'cd ' + fileRepo + '\ngit pull origin master\n'
 	childProcess.execSync(command1)
-	var filemetaPath = getFilemetaPath(filemetaDir, fileName)
-	if (!fs.existsSync(filemetaPath)) {
+	var filePath = getFilemetaPath(fileRepo, relativeFilePath)
+	if (!fs.existsSync(filePath)) {
 		return undefined
 	}
-	return fs.readFileSync(filemetaPath, 'utf8')
+	return fs.readFileSync(filePath, 'utf8')
 }
 
-exports.createOrUpdateFileInRepo = function(userID, relativeFilemetaPath, groupName, content, option, callback) {
-	var fileName = getFileNameFromFilemetaPath(relativeFilemetaPath)
-	var relativeFilemetaDir = getFilemetaDirFromFilemetaPath(relativeFilemetaPath, fileName)
+exports.createOrUpdateFileInRepo = function(userID, relativeFilePath, groupName, content, option, callback) {
+	var fileName = getFileNameFromFilemetaPath(relativeFilePath)
+	var relativeFileDir = getFilemetaDirFromFilemetaPath(relativeFilePath, fileName)
 	
 	var repoName = getRepoNameFromGroupName(groupName)
-	var fileDir = getFilemetaDir(userID, repoName + '/' + relativeFilemetaDir)
+	var fileDir = getFilemetaDir(userID, repoName + '/' + relativeFileDir)
 	var filePath = getFilemetaPath(fileDir, fileName)
 	
 	mkdirp.sync(fileDir)

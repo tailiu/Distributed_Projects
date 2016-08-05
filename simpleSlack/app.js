@@ -338,6 +338,10 @@ function getPublicKey(keyPath) {
 	return publicKey
 }
 
+function createChannel() {
+
+}
+
 //Create a team
 app.post('/createTeam', function(req, res) {
 	var email = req.body.email
@@ -488,25 +492,26 @@ app.post('/invite', function(req, res) {
 				    html: body 											// html body
 				}
 
-				var filemetaPath = hashedPublicKey + '/' + invitationHistoryFile
+				var filePath = invitationHistoryFile
 
-				var filemeta = stencil.getFileInRepo(filemetaPath, flatTeamName, hashedPublicKey)
+				var unprocessedFileContent = stencil.getFileInRepo(filePath, flatTeamName, hashedPublicKey)
 
 				var content = []
 				content[0] = {}
-				content[0].hashedPublicKey = hashedPublicKey
+				content[0].hashedInviterPublicKey = hashedPublicKey
 				content[0].inviteeEmail = inviteeEmail
 				content[0].ts = new Date()
 				content[0].status = 'pending'
 				content[0].invitationID = invitationID
 
-				if (filemeta == undefined) {
-					stencil.createOrUpdateFileInTorrent(hashedPublicKey, filemetaPath, flatTeamName, content, 'create', function() {
+				if (unprocessedFileContent == undefined) {
+					stencil.createOrUpdateFileInRepo(hashedPublicKey, filePath, flatTeamName, JSON.stringify(content), 'create', function() {
 						sendEmail(mailOptions, function () {
 							sendPages(res, data, '/homepage/team/invite/sentEmail')
 						})
 					})
 				} else {
+					var fileContent = JSON.parse(unprocessedFileContent)
 					stencil.updateFile()
 				}
 			}
@@ -768,119 +773,118 @@ app.post('/joinTeamRes', function(req, res) {
 	var inviterhashedPublicKey = req.body.inviterhashedPublicKey
 	var hashedInviteePublicKey = req.body.hashedInviteePublicKey
 
-	var filemetaPath = inviterhashedPublicKey + '/' + invitationHistoryFile
-	stencil.getFileFromTorrent(filemetaPath, teamName, moderatorHashedPublicKey, function(fileContent) {
+	var filePath = invitationHistoryFile
+	var fileContent = JSON.parse(stencil.getFileInRepo(filePath, teamName, moderatorHashedPublicKey))
 
-		var found = false
-		for (var i in fileContent) {
-			if (fileContent[i].invitationID == invitationID && fileContent[i].status == 'pending') {
-				var inviteeEmail = fileContent[i].inviteeEmail
-				fileContent[i].joinTeamTs = new Date()
-				fileContent[i].hashedInviteePublicKey = hashedInviteePublicKey
-				fileContent[i].status = 'accepted'
-				found = true
-				break
-			}
+	var found = false
+	for (var i in fileContent) {
+		if (fileContent[i].invitationID == invitationID && fileContent[i].status == 'pending') {
+			var inviteeEmail = fileContent[i].inviteeEmail
+			fileContent[i].joinTeamTs = new Date()
+			fileContent[i].hashedInviteePublicKey = hashedInviteePublicKey
+			fileContent[i].status = 'accepted'
+			found = true
+			break
 		}
-		if (found) {
+	}
+	if (found) {
 
-			stencil.createOrUpdateFileInTorrent(moderatorHashedPublicKey, filemetaPath, teamName, fileContent, 'update', function() {
+		stencil.createOrUpdateFileInRepo(moderatorHashedPublicKey, filePath, teamName, JSON.stringify(fileContent), 'update', function() {
 
-				var groupPublicKey = stencil.getFileInRepo(publicKeyFile, teamName, moderatorHashedPublicKey)
+			var groupPublicKey = stencil.getFileInRepo(publicKeyFile, teamName, moderatorHashedPublicKey)
 
-				getGroupInfo(teamName, groupPublicKey, function(err1, groupMeta) {
-					if (err1 != null) {
-						res.end(err1)
-					} else {
-						var changedContent = {}
-						var newMem = {}
-						newMem.username = username
-						newMem.hashedPublicKey = hashedInviteePublicKey
-						newMem.role = []
-						newMem.role[0] = 'normal'
-						changedContent.hashedPublicKey = hashedInviteePublicKey
-						changedContent.SSHPublicKey = SSHPublicKey
+			getGroupInfo(teamName, groupPublicKey, function(err1, groupMeta) {
+				if (err1 != null) {
+					res.end(err1)
+				} else {
+					var changedContent = {}
+					var newMem = {}
+					newMem.username = username
+					newMem.hashedPublicKey = hashedInviteePublicKey
+					newMem.role = []
+					newMem.role[0] = 'normal'
+					changedContent.hashedPublicKey = hashedInviteePublicKey
+					changedContent.SSHPublicKey = SSHPublicKey
 
-						groupMeta.groupMems.push(newMem)
-						delete groupMeta['signature']
-						var privateKey = getPrivateKey(teamName)
-						groupMeta.signature = getSignature(JSON.stringify(groupMeta), privateKey)
+					groupMeta.groupMems.push(newMem)
+					delete groupMeta['signature']
+					var privateKey = getPrivateKey(teamName)
+					groupMeta.signature = getSignature(JSON.stringify(groupMeta), privateKey)
 
-						stencil.updateGroupInfo(moderatorHashedPublicKey, teamName, changedContent, 'add user', groupMeta, function() {
+					stencil.updateGroupInfo(moderatorHashedPublicKey, teamName, changedContent, 'add user', groupMeta, function() {
 
-							var generalChannelFlatName
-							var generalChannelGroupMeta
-							var find = false
-							getUserInfo(moderatorHashedPublicKey, function(err, usermeta){
-								if (err != null) {
+						var generalChannelFlatName
+						var generalChannelGroupMeta
+						var find = false
+						getUserInfo(moderatorHashedPublicKey, function(err, usermeta){
+							if (err != null) {
 
+								var response = {}
+								response.type = err
+								res.write(JSON.stringify(response))
+								res.end()
+
+							} else {
+								for (var i in usermeta.groups) {
+									if (usermeta.groups[i].status == 'in') {
+										var done = false
+										var groupName = usermeta.groups[i].groupName
+
+										var groupPublicKey = stencil.getFileInRepo(publicKeyFile, groupName, moderatorHashedPublicKey)
+
+										getGroupInfo(groupName, groupPublicKey, function(err2, groupMeta) {
+											if (err2 != null) {
+												done = true
+												res.end(err2)
+											}
+											if (groupMeta.content.name == 'general' && groupMeta.content.teamName == teamName) {
+												generalChannelGroupMeta = groupMeta
+												generalChannelFlatName = groupName
+												find = true
+											}
+											done = true
+										})
+										deasync.loopWhile(function(){return !done})
+										if (find) {
+											break
+										}
+									}
+								}
+
+								generalChannelGroupMeta.groupMems.push(newMem)
+								delete generalChannelGroupMeta['signature']
+								var privateKey = getPrivateKey(generalChannelFlatName)
+								generalChannelGroupMeta.signature = getSignature(JSON.stringify(generalChannelGroupMeta), privateKey)
+
+								stencil.updateGroupInfo(moderatorHashedPublicKey, generalChannelFlatName, changedContent, 'add user', generalChannelGroupMeta, function(serverPath, knownHostsKey) {
+									
 									var response = {}
-									response.type = err
+									response.type = 'Accept'
+									response.generalChannel = generalChannelFlatName
+									response.knownHostsKey = knownHostsKey
+									response.serverPath = serverPath
 									res.write(JSON.stringify(response))
 									res.end()
 
-								} else {
-									for (var i in usermeta.groups) {
-										if (usermeta.groups[i].status == 'in') {
-											var done = false
-											var groupName = usermeta.groups[i].groupName
-
-											var groupPublicKey = stencil.getFileInRepo(publicKeyFile, groupName, moderatorHashedPublicKey)
-
-											getGroupInfo(groupName, groupPublicKey, function(err2, groupMeta) {
-												if (err2 != null) {
-													done = true
-													res.end(err2)
-												}
-												if (groupMeta.content.name == 'general' && groupMeta.content.teamName == teamName) {
-													generalChannelGroupMeta = groupMeta
-													generalChannelFlatName = groupName
-													find = true
-												}
-												done = true
-											})
-											deasync.loopWhile(function(){return !done})
-											if (find) {
-												break
-											}
-										}
-									}
-
-									generalChannelGroupMeta.groupMems.push(newMem)
-									delete generalChannelGroupMeta['signature']
-									var privateKey = getPrivateKey(generalChannelFlatName)
-									generalChannelGroupMeta.signature = getSignature(JSON.stringify(generalChannelGroupMeta), privateKey)
-
-									stencil.updateGroupInfo(moderatorHashedPublicKey, generalChannelFlatName, changedContent, 'add user', generalChannelGroupMeta, function(serverPath, knownHostsKey) {
-										
-										var response = {}
-										response.type = 'Accept'
-										response.generalChannel = generalChannelFlatName
-										response.knownHostsKey = knownHostsKey
-										response.serverPath = serverPath
-										res.write(JSON.stringify(response))
-										res.end()
-
-									})
-								}
-
-							})
+								})
+							}
 
 						})
-					}
 
-				})
+					})
+				}
 
 			})
-		} else {
 
-			var response = {}
-			response.type = 'No Such Invitation'
-			res.write(JSON.stringify(response))
-			res.end()
+		})
+	} else {
 
-		}
-	})
+		var response = {}
+		response.type = 'No Such Invitation'
+		res.write(JSON.stringify(response))
+		res.end()
+
+	}
 })
 
 
