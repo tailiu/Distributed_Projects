@@ -464,7 +464,7 @@ exports.createGroup = function (meta, callback) {
 	var creatorPublicKey = meta.creatorPublicKey
 	var creatorPrivateKey = meta.creatorPrivateKey
 	var groupName = meta.groupName
-	var serverAddr = meta.serverAddr
+	var serverAddr = meta.remote
 
 	var hashedPublicKey = calculateHash(creatorPublicKey)
 	var dir = hashedPublicKey + '/' + createdGroupsDir + '/' + serverAddr
@@ -482,11 +482,7 @@ exports.createGroup = function (meta, callback) {
 					cloneRepo(adminLocation, dir)
 				}
 
-				var changedContent = {}
-				changedContent.groupName = groupName
-				changedContent.status = 'in'
-
-				updateUserInfo(hashedPublicKey, usermeta, changedContent, 'add group', creatorPrivateKey, function() {
+				updateUserInfo(hashedPublicKey, usermeta, groupName, 'add group', creatorPrivateKey, function() {
 
 					groupDHT.connect(groupDHTSeed, function(err) {
 						var groupMeta = {}
@@ -500,13 +496,15 @@ exports.createGroup = function (meta, callback) {
 						groupMeta.groupMems[0].role = []
 						groupMeta.groupMems[0].role[0] = 'creator'
 						groupMeta.description = meta.description
-						groupMeta.groupType = meta.groupType
 						groupMeta.ts = new Date()
 						groupMeta.content = {}
-						groupMeta.content.type = meta.type
 						groupMeta.content.teamName = meta.teamName
 						groupMeta.content.name = meta.name
 						groupMeta.signature = getSignature(JSON.stringify(groupMeta), meta.privateKey)
+
+						if (meta.groupType == 'private') {
+							
+						}
 
 						if (!fs.existsSync(hashedPublicKey + '/' + joinedGroupsDir)) {
 							mkdirp.sync(hashedPublicKey + '/' + joinedGroupsDir)
@@ -514,6 +512,7 @@ exports.createGroup = function (meta, callback) {
 						changePulicKeyFileName(dir, hashedPublicKey)
 						addRepo(repoName, dir + confDir + confFile, hashedPublicKey, dir + confDir)
 						cloneRepo(repoLocation, dir1)
+
 						groupDHT.put(groupName, groupMeta, function(){
 							callback()
 						})
@@ -652,6 +651,20 @@ exports.updateGroupInfo = function (userID, groupName, changedContent, option, n
 			})
 		})
 	}
+}
+
+exports.addKeyAndUpdateConfigFileInAdminRepo = function(userID, groupName, SSHPublicKey, hashedPublicKey, callback) {
+	var repoName = getRepoNameFromGroupName(groupName)
+	var path = getServerRepoAddr(userID, repoName)
+	var localServerDir = getLocalServerDir(userID, path)
+
+	addKey(localServerDir, SSHPublicKey, hashedPublicKey)
+	updateConfig(localServerDir, repoName, hashedPublicKey)
+
+	var serverAddr = getServerAddr(path)
+	var knownHostKey = getKnownHostKey(serverAddr)
+
+	callback(path, knownHostKey)
 }
 
 exports.leaveGroup = function (username, groupName, callback) {

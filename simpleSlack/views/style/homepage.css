@@ -115,4 +115,12 @@ a:hover { text-decoration:underline; }
   
 #menu { padding:12.5px 25px 12.5px 25px; }
   
-.channelInfo { float:left; }
+#channelInvitation { float:left; }
+
+#channelInvitation button {
+    background:none;
+    border:none; 
+    padding:0;
+    font: inherit;
+    cursor: pointer; 
+}

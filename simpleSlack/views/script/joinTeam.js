@@ -1,9 +1,8 @@
 function start() {
 	var joinTeamForm = ''
-	joinTeamForm += '<form method="get" action="http://localhost:3000/acceptInvitation">'
+	joinTeamForm += '<form method="get" action="http://localhost:3000/acceptInvitationToTeam">'
 	joinTeamForm += '<input type="hidden" name="invitationID" value="' + invitationID + '">'
 	joinTeamForm += '<input type="hidden" name="team" value="' + flatTeamName + '">'
-	joinTeamForm += '<input type="hidden" name="inviterHashedPublicKey" value="' + inviterHashedPublicKey + '">'
 	joinTeamForm += '<input type="hidden" name="inviteeEmail" value="' + inviteeEmail + '">'
 	joinTeamForm += '<input type="hidden" name="encodedGroupPublicKey" value="' + encodedGroupPublicKey + '">'
 	joinTeamForm += '<input type="hidden" name="dataCompleted" value="true">'

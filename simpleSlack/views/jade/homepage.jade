@@ -12,8 +12,9 @@ html(lang="en")
         button(type="button", onclick="logout()")|logout(#{username})
     #nav
     #buttons
-        button(type="button", id="newChannelID", onclick="newChannel()")|New Channel
-        button(type="button", id="channels", onclick="getChannels()")|Channels
+        button(type="button", onclick="newChannel()")|New Channel
+        button(type="button", onclick="getChannels()")|Channels
+        button(type="button", onclick="browseAllChannels()")|Browse All Channels
         button(type="button", onclick="renderTeamConfig()")|Team
     #mainSection
     script

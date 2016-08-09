@@ -23,17 +23,6 @@ function renderPosts(posts) {
     }
 }
 
-function getChannels() {
-    var getChannelsForm = '<form action="http://localhost:3000/getChannels" method="post">'
-    getChannelsForm += '<input type="hidden" name="username" value="'+ username +'">'
-    getChannelsForm += '<input type="hidden" name="hashedPublicKey" value="'+ hashedPublicKey +'">'
-    getChannelsForm += '<input type="hidden" name="flatTeamName" value="'+ flatTeamName +'">'
-    getChannelsForm += '<input type="hidden" name="readableTeamName" value="'+ readableTeamName +'">'
-    getChannelsForm += '<input type="submit" name="submit" value="submit" style="display:none" id="getChannelsButton"></form>'
-    document.getElementById("mainSection").innerHTML = getChannelsForm
-    $("#getChannelsButton").trigger('click')
-}
-
 function renderComments(post) {
     var comments = post.comments;
     if (comments.length == 0) {
@@ -66,11 +55,6 @@ function renderComments(post) {
     }
 }
 
-function logout() {
-    if (confirm("Are you sure to leave?") == true) {
-        window.location.href = "http://localhost:3000/logout?username=" + username
-    }
-}
 function NoSuchGroup(option) {
     var searchNoResult = ''
     if (option == 'join') {
@@ -244,6 +228,24 @@ $(document).on('click', '.section', function() {
 
 
 
+
+function logout() {
+    if (confirm("Are you sure to leave?") == true) {
+        window.location.href = "http://localhost:3000/logout?username=" + username
+    }
+}
+
+function getChannels() {
+    var getChannelsForm = '<form action="http://localhost:3000/getChannels" method="post">'
+    getChannelsForm += '<input type="hidden" name="username" value="'+ username +'">'
+    getChannelsForm += '<input type="hidden" name="hashedPublicKey" value="'+ hashedPublicKey +'">'
+    getChannelsForm += '<input type="hidden" name="flatTeamName" value="'+ flatTeamName +'">'
+    getChannelsForm += '<input type="hidden" name="readableTeamName" value="'+ readableTeamName +'">'
+    getChannelsForm += '<input type="submit" name="submit" value="submit" style="display:none" id="getChannelsButton"></form>'
+    document.getElementById("mainSection").innerHTML = getChannelsForm
+    $("#getChannelsButton").trigger('click')
+}
+
 function newChannel() {
     var newChannelForm = '<form action="http://localhost:3000/newChannel" method="post" id="newChannel">'
     newChannelForm += 'Name: <input type="text" name="channelName"><br><br>'
@@ -252,8 +254,10 @@ function newChannel() {
     newChannelForm += "<input type='hidden' name='readableTeamName' value="+ readableTeamName +">"
     newChannelForm += "<input type='hidden' name='username' value="+ username +">"
     newChannelForm += 'Type of Channel:<br>'
-    newChannelForm += '<input type="radio" name="type" value="private">Public<br>'
-    newChannelForm += '<input type="radio" name="type" value="public">Private<br><br>'
+    newChannelForm += '<input type="radio" name="type" value="public">Public<br>'
+    newChannelForm += '<input type="radio" name="type" value="private">Private<br><br>'
+    newChannelForm += 'Remote to put the repo:<br>'
+    newChannelForm += '<input type="text" name="remote" placeholder="git@localhost"><br><br>'
     newChannelForm += 'Purpose:<br>'
     newChannelForm += '<textarea rows="6" cols="50" name="purpose" form="newChannel"></textarea><br>'
     newChannelForm += "<input type='submit' name='createChannelButton' value='Create Channel' ></form>"
@@ -262,7 +266,7 @@ function newChannel() {
 
 $(document).on('click', '#inviteOthers', function() {
     var invitationForm = "<h3>Invite Others to Team</h3><br>"
-    invitationForm += "<form action='http://localhost:3000/invite' method='post'>"
+    invitationForm += "<form action='http://localhost:3000/inviteToTeam' method='post'>"
     invitationForm += "<input type='hidden' name='hashedPublicKey' value=" + hashedPublicKey + ">"
     invitationForm += "<input type='hidden' name='flatTeamName' value="+ flatTeamName +">"
     invitationForm += "<input type='hidden' name='readableTeamName' value="+ readableTeamName +">"
@@ -276,15 +280,40 @@ function renderChannels() {
     var ch = ''
     var para = 'hashedPublicKey=' + hashedPublicKey + '&&username=' + username + '&&readableTeamName=' + readableTeamName + '&&flatTeamName=' + flatTeamName
     for (var i in channels) {
-        ch += '<a href="http://localhost:3000/renderChannel?' + para + '&&flatCName=' + channels[i].flatName + '\">' + channels[i].readableName + '</a><br>'
+        if (channels[i].status == 'in') {
+             ch += '<a href="http://localhost:3000/renderChannel?' + para + '&&flatCName=' + channels[i].flatName + '\">' + channels[i].readableName + '</a><br>'
+        }
     }
     document.getElementById("nav").innerHTML = ch
 }
 
+function renderAllChannels() {
+    var notIn = false
+    var ch = ''
+    ch += '<p><b>Channels you belong to</b><p>'
+    for (var i in channels) {
+        if (channels[i].status == 'in') {
+             ch +=  channels[i].readableName + '  (' + channels[i].type + ')<br>'
+        } else {
+            notIn = true
+        }
+    }
+    if (notIn) {
+        ch += '<br>'
+        ch += '<p><b>Channels you can join</b><p>'
+        for (var i in channels) {
+            if (channels[i].status == 'out') {
+                 ch +=  channels[i].readableName + '  (' + channels[i].type + ')<br>'
+            }
+        }
+    }
+    document.getElementById("mainSection").innerHTML = ch
+}
+
 function autoScrolling() {
     var chatemt = document.getElementById("chatbox");
-    var scrollHeight = chatemt.scrollHeight //Scroll height after the request
-    $("#chatbox").animate({ scrollTop: scrollHeight }, 0.01) //Autoscroll to bottom of chatbox
+    var scrollHeight = chatemt.scrollHeight                     //Scroll height after the request
+    $("#chatbox").animate({ scrollTop: scrollHeight }, 0.01)    //Autoscroll to bottom of chatbox
 
 }
 
@@ -299,14 +328,48 @@ function renderChatMsgs() {
     autoScrolling()
 }
 
+function renderChannelInviteeList(inviteeList) {
+    var list = ""
+    list += "<h3>Invite Others to Channel</h3>"
+    list += "<form action='http://localhost:3000/inviteToChannel' method='post'>"
+    list += "<input type='hidden' name='hashedPublicKey' value=" + hashedPublicKey + ">"
+    list += "<input type='hidden' name='flatTeamName' value="+ flatTeamName +">"
+    list += "<input type='hidden' name='readableTeamName' value="+ readableTeamName +">"
+    list += "<input type='hidden' name='username' value="+ username +">"
+    list += "<input type='hidden' name='chosenChannel' value="+ chosenChannel +">"
+    for (var i in inviteeList) {
+        list += "<input type='checkbox' name='inviteeList' value='" + inviteeList[i].hashedPublicKey + "'>" + inviteeList[i].username + "<br>"
+    }
+    list += "<br><input type='submit' name='inviteButton' value='invite' ></form>"
+    document.getElementById("mainSection").innerHTML = list
+}
+
+function inviteToChannel() {
+    var req = {}
+    req.hashedPublicKey = hashedPublicKey
+    req.flatTeamName = flatTeamName
+    req.chosenChannel = chosenChannel
+
+    $.post('http://localhost:3000/getChannelInviteeList', req, function(value) {
+        value = removeHTMLTagsFrontAndEnd(value)
+        var data = JSON.parse(value)
+        
+        if (data.inviteeListEmpty) {
+            document.getElementById("mainSection").innerHTML = 'No user should be invited'
+        } else {
+            renderChannelInviteeList(data.inviteeList)
+        }
+    }, 'html') 
+}
+
 function renderChatbox() {
     var chatbox = ''
 
     chatbox += '<div id="wrapper">'
 
     chatbox +=      '<div id="menu">'
-    chatbox +=          '<p class="channelInfo">'
-    chatbox +=              '<b></b>'
+    chatbox +=          '<p id="channelInvitation">'
+    chatbox +=              '<button type="button" onclick="inviteToChannel()"><b>Invite others to this channel</b></button>'
     chatbox +=          '</p>'
     chatbox +=          '<div style="clear:both"></div>'
     chatbox +=      '</div>'
@@ -329,6 +392,12 @@ function renderChatbox() {
     renderChatMsgs()
 }
 
+//remove the html tag at the front and the end
+function removeHTMLTagsFrontAndEnd(value) {
+    var len = value.length
+    return value.substring(6, len - 7)
+}
+
 function sendRefreshReq() {
     var req = {}
     req.hashedPublicKey = hashedPublicKey
@@ -336,15 +405,13 @@ function sendRefreshReq() {
     req.chosenChannel = chosenChannel
 
     $.post('http://localhost:3000/refreshChannelMsgs', req, function(value) {
-        //remove the html tag at the front and the end
-        var len = value.length
-        var value = value.substring(6, len - 7)
+        value = removeHTMLTagsFrontAndEnd(value)
 
         var data = JSON.parse(value)
         if (data.updated) {
             msgs = data.msgs
             renderChatMsgs()
-        }
+        } 
     }, 'html') 
 }
 
@@ -352,16 +419,27 @@ function refresh() {
     setInterval(function(){ sendRefreshReq() }, refreshInterval)
 }
 
+function browseAllChannels() {
+    var form = '<form action="http://localhost:3000/browseAllChannels" method="post">'
+    form += '<input type="hidden" name="username" value="'+ username +'">'
+    form += '<input type="hidden" name="hashedPublicKey" value="'+ hashedPublicKey +'">'
+    form += '<input type="hidden" name="flatTeamName" value="'+ flatTeamName +'">'
+    form += '<input type="hidden" name="readableTeamName" value="'+ readableTeamName +'">'
+    form += '<input type="submit" name="submit" value="submit" style="display:none" id="browseAllChannelsButton"></form>'
+    document.getElementById("mainSection").innerHTML = form
+    $("#browseAllChannelsButton").trigger('click')
+}
+
 function start() {
     if (page == '/homepage/channels/getChannels') {
         renderChannels()
         document.getElementById("mainSection").innerHTML = 'Slack: Be less busy'
     }
-    if (page == '/homepage/team/invite/alreadyInTeam') {
+    if (page == '/homepage/team/inviteToTeam/alreadyInTeam') {
         renderTeamConfig()
         alreadyInTeam()
     }
-    if (page == '/homepage/team/invite/sentEmail') {
+    if (page == '/homepage/team/inviteToTeam/sentEmail') {
         renderTeamConfig()
         sentInvitationEmail()
     }
@@ -370,6 +448,11 @@ function start() {
         renderChatbox()
         refresh()
     }
+    if (page == '/homepage/channels/browseAllChannels') {
+        renderChannels()
+        renderAllChannels()
+    }
+
 
 
     if (page.path == 'homepage/newComment') {
