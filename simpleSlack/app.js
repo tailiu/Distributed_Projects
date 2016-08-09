@@ -14,6 +14,7 @@ var request = require('request')
 var fs = require('graceful-fs')
 var http = require('http')
 var https = require('https')
+var mkdirp = require('mkdirp')
 
 const slackEmailDomain = 'stencil.slack@gmail.com'
 
@@ -62,8 +63,11 @@ var knownHostsPath = '/home/' + findCurrentAccount() + '/.ssh/known_hosts'
 var userMsgLogs = 'message_log'
 var publicKeyFile = 'group_public_key'
 var invitationHistoryFile = 'invitation_history'
-var normalMemList = 'member_list'
+var memListFile = 'member_list'
 var groupMetaFile = 'group_meta'
+var privateChannelsFile = 'private_channels'
+var teamAndNameFile = 'team_and_name'
+var usermetaFile = 'user_meta'
 
 app.set('views', './views/jade')
 app.set('view engine', 'jade')
@@ -249,8 +253,18 @@ function createUser(keyPath, callback) {
 	var publicKey = getPublicKey(keyPath)
 	var hashedPublicKey = calculateHash(publicKey)
 	var	privateKey = getPrivateKey(keyPath)
-	stencil.createUser(hashedPublicKey, privateKey, publicKey, function() {
-		callback(publicKey, privateKey)
+
+	var localUserMeta = {}
+	localUserMeta.ts = new Date()
+
+	mkdirp(hashedPublicKey)
+
+	fs.writeFile(hashedPublicKey + '/' + usermetaFile, JSON.stringify(localUserMeta), function(err) {
+
+		stencil.createUser(hashedPublicKey, privateKey, publicKey, function() {
+			callback(publicKey, privateKey)
+		})
+
 	})
 }
 
@@ -270,8 +284,46 @@ function getPublicKey(keyPath) {
 	return publicKey
 }
 
+function addContentToJSONFileInRepo(filePath, groupName, hashedPublicKey, addedContent, callback) {
+	var unprocessedFileContent = stencil.getFileInRepo(filePath, groupName, hashedPublicKey)
+	var option
+	var content
+
+	if (unprocessedFileContent == undefined) {
+		content = []
+		content.push(addedContent)
+		option = 'create'
+	} else {
+		content = JSON.parse(unprocessedFileContent)
+		content.push(addedContent)
+		option = 'update'
+	}
+
+	stencil.createOrUpdateFileInRepo(hashedPublicKey, filePath, groupName, JSON.stringify(content), option, function() {
+		callback()
+	})
+}
+
+function addContentToJSONFileLocally(filePath, addedContent, callback) {
+	fs.readFile(filePath, 'utf8', function(err, unprocessedFileContent) {
+
+		var content
+		if (unprocessedFileContent == undefined) {
+			content = []
+			content.push(addedContent)
+		} else {
+			content = JSON.parse(unprocessedFileContent)
+			content.push(addedContent)
+		}
+
+		fs.writeFile(filePath, JSON.stringify(content), function(err) {
+			callback()
+		})
+	})
+}
+
 app.post('/newChannel', function(req, res) {
-    var channelName = req.body.channelName
+    var readableName = req.body.channelName
     var hashedPublicKey = req.body.hashedPublicKey
 	var username = req.body.username
 	var readableTeamName = req.body.readableTeamName
@@ -290,43 +342,97 @@ app.post('/newChannel', function(req, res) {
 		creatorPrivateKey = getPrivateKey('tl67@nyu.edu')
 	}
 
-	var channelMeta = {}
-	label = createRandom()
-	channelMeta.creatorPublicKey = creatorPublicKey
-	channelMeta.creatorPrivateKey = creatorPrivateKey
-	channelMeta.username = username
-	channelMeta.password = req.body.password
-	channelMeta.description = purpose
-	channelMeta.teamName = flatTeamName
-	channelMeta.name = channelName
-	channelMeta.remote = remote
-	channelMeta.groupName = hashedStencilPublicKey + ':' + hashedSlackPublicKey + ':' + label
+	var channelMetaPutOnDHT = {}
+	channelMetaPutOnDHT.creatorPublicKey = creatorPublicKey
+	channelMetaPutOnDHT.creatorPrivateKey = creatorPrivateKey
+	channelMetaPutOnDHT.remote = remote
 
-	createPublicKeyPair(channelMeta.groupName)
-	var channelPublicKey = getPublicKey(channelMeta.groupName)
-	var channelPrivateKey = getPrivateKey(channelMeta.groupName)
-	channelMeta.privateKey = channelPrivateKey
-	channelMeta.publicKey = channelPublicKey
-	channelMeta.groupType = channelType
+	if (channelType == 'public') {
+		channelMetaPutOnDHT.teamName = flatTeamName
+		channelMetaPutOnDHT.readableName = readableName
+	}
 
-	stencil.createGroup(channelMeta, function (err) {
+	var label = createRandom()
+	var channelName = hashedStencilPublicKey + ':' + hashedSlackPublicKey + ':' + label
+	channelMetaPutOnDHT.groupName = channelName
+
+	createPublicKeyPair(channelName)
+	var channelPublicKey = getPublicKey(channelName)
+	var channelPrivateKey = getPrivateKey(channelName)
+	channelMetaPutOnDHT.privateKey = channelPrivateKey
+	channelMetaPutOnDHT.publicKey = channelPublicKey
+	channelMetaPutOnDHT.groupType = channelType
+
+	stencil.putOnGroupDHT(channelMetaPutOnDHT, function (err) {
 		if (err != null) {
 			res.end(err)
 		} else {
-			stencil.createOrUpdateFileInRepo(hashedPublicKey, publicKeyFile, channelMeta.groupName, channelPublicKey, 'create', function() {
 
-				stencil.createOrUpdateFileInTorrent(hashedPublicKey, userMsgLogs, channelMeta.groupName, [], 'create', function() {
-					var data = {}
-					data.flatTeamName = flatTeamName
-					data.readableTeamName = readableTeamName
-					data.username = username
-					data.hashedPublicKey = hashedPublicKey
+			var channelMetaPutInGroupMetaInRepo = {}
+			channelMetaPutInGroupMetaInRepo.description = purpose
+			channelMetaPutInGroupMetaInRepo.ts = new Date()
 
-					sendPages(res, data, '/homepage/channels/getChannels')
+			stencil.createOrUpdateFileInRepo(hashedPublicKey, groupMetaFile, channelName, JSON.stringify(channelMetaPutInGroupMetaInRepo), 'create', function() {
+
+				var channelMetaPutInMemListInRepo = []
+				channelMetaPutInMemListInRepo[0] = {}
+				channelMetaPutInMemListInRepo[0].username = username
+				channelMetaPutInMemListInRepo[0].hashedPublicKey = hashedPublicKey
+				channelMetaPutInMemListInRepo[0].role = []
+				channelMetaPutInMemListInRepo[0].role[0] = 'creator'
+
+				stencil.createOrUpdateFileInRepo(hashedPublicKey, memListFile, channelName, JSON.stringify(channelMetaPutInMemListInRepo), 'create', function() {
+
+					stencil.createOrUpdateFileInRepo(hashedPublicKey, publicKeyFile, channelName, channelPublicKey, 'create', function() {
+
+						stencil.createOrUpdateFileInTorrent(hashedPublicKey, userMsgLogs, channelName, [], 'create', function() {
+
+							if (channelType == 'public') {
+								getUserInfo(hashedPublicKey, function(err, usermeta) {
+									if (err != null) {
+										res.end(err)
+									} else {
+										stencil.updateUserInfo(hashedPublicKey, usermeta, channelName, 'add group', creatorPrivateKey, function() {
+
+											var data = {}
+											data.flatTeamName = flatTeamName
+											data.readableTeamName = readableTeamName
+											data.username = username
+											data.hashedPublicKey = hashedPublicKey
+
+											sendPages(res, data, '/homepage/channels/getChannels')
+
+										})
+									}
+								})
+							} else {
+								var teamAndReadableName = {}
+								teamAndReadableName.teamName = flatTeamName
+								teamAndReadableName.name = readableName
+
+								addContentToJSONFileInRepo(teamAndNameFile, channelName, hashedPublicKey, teamAndReadableName, function() {
+
+									addContentToJSONFileLocally(hashedPublicKey + '/' + privateChannelsFile, channelName, function(err) {
+										
+										var data = {}
+										data.flatTeamName = flatTeamName
+										data.readableTeamName = readableTeamName
+										data.username = username
+										data.hashedPublicKey = hashedPublicKey
+
+										sendPages(res, data, '/homepage/channels/getChannels')
+
+									})
+								})
+							}
+							
+						})
+					})
 				})
 			})
 		}
 	})
+
 })
 
 function getMembListDifference(listOne, listTwo) {
@@ -353,59 +459,43 @@ app.post('/getChannelInviteeList', function(req, res) {
 
     var data = {}
 
-    findAllGroupMems(flatTeamName, hashedPublicKey, function(err, teamMems) {
-    	if (err != null) {
-    		data.err = err
-			var result = '<html>' + JSON.stringify(data) + '</html>'
-			res.end(result)
-    	} else {
-    		findAllGroupMems(chosenChannel, hashedPublicKey, function(err, channelMems) {
-    			if (err != null) {
-    				data.err = err
-					var result = '<html>' + JSON.stringify(data) + '</html>'
-					res.end(result)
-    			} else {
-    				var inviteeList = getMembListDifference(teamMems, channelMems)
-
-					if (inviteeList.length == 0) {
-						data.inviteeListEmpty = true
-					} else {
-						data.inviteeListEmpty = false
-					}
-					
-					data.inviteeList = inviteeList
-					var result = '<html>' + JSON.stringify(data) + '</html>'
-					res.end(result)
-    			}
-    		})
-    	}
-    })
+    var teamMems = findAllGroupMems(flatTeamName, hashedPublicKey)	
+    var channelMems = findAllGroupMems(chosenChannel, hashedPublicKey)
+    
+    var inviteeList = getMembListDifference(teamMems, channelMems)
+	if (inviteeList.length == 0) {
+		data.inviteeListEmpty = true
+	} else {
+		data.inviteeListEmpty = false
+	}
+	
+	data.inviteeList = inviteeList
+	var result = '<html>' + JSON.stringify(data) + '</html>'
+	res.end(result)
 	 
 })
 
 //Create a team
 app.post('/createTeam', function(req, res) {
 	var email = req.body.email
+	var username = req.body.username
+	var readableTeamName = req.body.teamName
+	var remote = req.body.remote
 
 	var done = false
-	var publicKey
-	var privateKey
+	var creatorPublicKey
+	var creatorPrivateKey
 
-	var teamMeta = {}
-	teamMeta.username = req.body.username
-	teamMeta.password = req.body.password
-	teamMeta.description = req.body.description
-	teamMeta.remote = req.body.remote
-	teamMeta.type = 't'
-	teamMeta.name = req.body.teamName
+	var teamMetaPutOnDHT = {}
+	teamMetaPutOnDHT.remote = remote
 
 	//we need to map email to public key so that we know whether there is a userID this email
 	//corresponds to exists or not. Right now this is just a temporary method 
-	publicKey = getPublicKey(email)
-	if (publicKey == undefined) {
+	creatorPublicKey = getPublicKey(email)
+	if (creatorPublicKey == undefined) {
 		createUser(email, function(pubKey, priKey) {
-			publicKey = pubKey
-			privateKey = priKey
+			creatorPublicKey = pubKey
+			creatorPrivateKey = priKey
 			done = true
 		})
 	} else {
@@ -413,63 +503,120 @@ app.post('/createTeam', function(req, res) {
 	}
 	deasync.loopWhile(function(){return !done})
 
-	var userID = calculateHash(publicKey)
-	teamMeta.creatorPrivateKey = privateKey
-	teamMeta.creatorPublicKey = publicKey
+	var userID = calculateHash(creatorPublicKey)
+	teamMetaPutOnDHT.creatorPublicKey = creatorPublicKey
 
 	var label = createRandom()
-	teamMeta.groupName = hashedStencilPublicKey + ':' + hashedSlackPublicKey + ':' + label
-	teamMeta.teamName = teamMeta.groupName
+	teamName = hashedStencilPublicKey + ':' + hashedSlackPublicKey + ':' + label
+	teamMetaPutOnDHT.groupName = teamName
+	teamMetaPutOnDHT.teamName = teamName
+	teamMetaPutOnDHT.readableName = readableTeamName
 
-	createPublicKeyPair(teamMeta.teamName)
-	var teamPublicKey = getPublicKey(teamMeta.teamName)
-	var teamPrivateKey = getPrivateKey(teamMeta.teamName)
-	teamMeta.privateKey = teamPrivateKey
+	createPublicKeyPair(teamMetaPutOnDHT.teamName)
+	var teamPublicKey = getPublicKey(teamMetaPutOnDHT.teamName)
+	var teamPrivateKey = getPrivateKey(teamMetaPutOnDHT.teamName)
+	teamMetaPutOnDHT.privateKey = teamPrivateKey
 
-	stencil.createGroup(teamMeta, function (err) {
-		if (err != null) {
-			res.end(err)
-		} else {
-			stencil.createOrUpdateFileInRepo(userID, publicKeyFile, teamMeta.teamName, teamPublicKey, 'create', function() {
+	teamMetaPutOnDHT.groupType = 'public'
 
-				var channelMeta = {}
-				label = createRandom()
-				channelMeta.creatorPublicKey = publicKey
-				channelMeta.creatorPrivateKey = privateKey
-				channelMeta.username = req.body.username
-				channelMeta.password = req.body.password
-				channelMeta.description = 'team wide communication and announcement'
-				channelMeta.teamName = teamMeta.groupName
-				channelMeta.name = 'general'
-				channelMeta.remote = req.body.remote
-				channelMeta.groupName = hashedStencilPublicKey + ':' + hashedSlackPublicKey + ':' + label
+	stencil.putOnGroupDHT(teamMetaPutOnDHT, function () {
+	
+		var teamMetaPutInGroupMetaInRepo = {}
+		teamMetaPutInGroupMetaInRepo.description = req.body.description			
+		teamMetaPutInGroupMetaInRepo.ts = new Date()
 
-				createPublicKeyPair(channelMeta.groupName)
-				var channelPublicKey = getPublicKey(channelMeta.groupName)
-				var channelPrivateKey = getPrivateKey(channelMeta.groupName)
-				channelMeta.privateKey = channelPrivateKey
+		stencil.createOrUpdateFileInRepo(userID, groupMetaFile, teamName, JSON.stringify(teamMetaPutInGroupMetaInRepo), 'create', function() {
 
-				stencil.createGroup(channelMeta, function (err) {
-					if (err != null) {
-						res.end(err)
-					} else {
-						stencil.createOrUpdateFileInRepo(userID, publicKeyFile, channelMeta.groupName, channelPublicKey, 'create', function() {
+			var teamMetaPutInMemListInRepo = []
+			teamMetaPutInMemListInRepo[0] = {}
+			teamMetaPutInMemListInRepo[0].username = username
+			teamMetaPutInMemListInRepo[0].hashedPublicKey = userID
+			teamMetaPutInMemListInRepo[0].role = []
+			teamMetaPutInMemListInRepo[0].role[0] = 'creator'
 
-							stencil.createOrUpdateFileInTorrent(userID, userMsgLogs, channelMeta.groupName, [], 'create', function() {
-								var data = {}
-								data.flatTeamName = teamMeta.groupName
-								data.readableTeamName = teamMeta.name
-								data.username = teamMeta.username
-								data.hashedPublicKey = userID
+			stencil.createOrUpdateFileInRepo(userID, memListFile, teamName, JSON.stringify(teamMetaPutInMemListInRepo), 'create', function() {
 
-								sendPages(res, data, '/homepage/channels/getChannels')
+				stencil.createOrUpdateFileInRepo(userID, publicKeyFile, teamName, teamPublicKey, 'create', function() {
+
+					getUserInfo(userID, function(err, usermeta) {
+						if (err != null) {
+							res.end(err)
+						} else {
+							stencil.updateUserInfo(userID, usermeta, teamName, 'add group', creatorPrivateKey, function() {
+
+
+
+
+								var channelMetaPutOnDHT = {}
+								label = createRandom()
+								channelMetaPutOnDHT.creatorPublicKey = creatorPublicKey
+								channelMetaPutOnDHT.teamName = teamName
+								channelMetaPutOnDHT.remote = remote
+								channelMetaPutOnDHT.groupType = 'public'
+								channelMetaPutOnDHT.readableName = 'general'
+
+								var channelName = hashedStencilPublicKey + ':' + hashedSlackPublicKey + ':' + label
+								channelMetaPutOnDHT.groupName = channelName
+
+								createPublicKeyPair(channelName)
+								var channelPublicKey = getPublicKey(channelName)
+								var channelPrivateKey = getPrivateKey(channelName)
+								channelMetaPutOnDHT.privateKey = channelPrivateKey
+
+								stencil.putOnGroupDHT(channelMetaPutOnDHT, function () {
+									
+									var channelMetaPutInGroupMetaInRepo = {}
+									channelMetaPutInGroupMetaInRepo.description = 'team wide communication and announcement'
+									channelMetaPutInGroupMetaInRepo.ts = new Date()
+
+									stencil.createOrUpdateFileInRepo(userID, groupMetaFile, channelName, JSON.stringify(channelMetaPutInGroupMetaInRepo), 'create', function() {
+
+										var channelMetaPutInMemListInRepo = []
+										channelMetaPutInMemListInRepo[0] = {}
+										channelMetaPutInMemListInRepo[0].username = username
+										channelMetaPutInMemListInRepo[0].hashedPublicKey = userID
+										channelMetaPutInMemListInRepo[0].role = []
+										channelMetaPutInMemListInRepo[0].role[0] = 'creator'
+
+										stencil.createOrUpdateFileInRepo(userID, memListFile, channelName, JSON.stringify(channelMetaPutInMemListInRepo), 'create', function() {
+
+											stencil.createOrUpdateFileInRepo(userID, publicKeyFile, channelName, channelPublicKey, 'create', function() {
+
+												stencil.createOrUpdateFileInTorrent(userID, userMsgLogs, channelName, [], 'create', function() {
+
+													getUserInfo(userID, function(err, usermeta) {
+														if (err != null) {
+															res.end(err)
+														} else {
+															stencil.updateUserInfo(userID, usermeta, channelName, 'add group', creatorPrivateKey, function() {
+
+
+																var data = {}
+																data.flatTeamName = teamName
+																data.readableTeamName = readableTeamName
+																data.username = username
+																data.hashedPublicKey = userID
+
+																sendPages(res, data, '/homepage/channels/getChannels')
+
+															})
+														}
+													})
+												})
+											})
+										})
+									})
+									
+								})
+
 							})
-						})
-					}
+
+						}
+
+					})
 				})
-				
 			})
-		}
+		})
 	})
 })
 
@@ -507,10 +654,6 @@ function sendInvitationEmail(flatGroupName, readableGroupName, hashedPublicKey, 
 	    html: body 											// html body
 	}
 
-	var filePath = invitationHistoryFile
-
-	var unprocessedFileContent = stencil.getFileInRepo(filePath, flatGroupName, hashedPublicKey)
-
 	var newItem = {}
 	newItem.hashedInviterPublicKey = hashedPublicKey
 	newItem.inviteeEmail = inviteeEmail
@@ -518,15 +661,7 @@ function sendInvitationEmail(flatGroupName, readableGroupName, hashedPublicKey, 
 	newItem.status = 'pending'
 	newItem.invitationID = invitationID
 
-	if (unprocessedFileContent == undefined) {
-		var content = []
-		content.push(newItem)
-	} else {
-		var content = JSON.parse(unprocessedFileContent)
-		content.push(newItem)
-	}
-
-	stencil.createOrUpdateFileInRepo(hashedPublicKey, filePath, flatGroupName, JSON.stringify(content), 'create', function() {
+	addContentToJSONFileInRepo(invitationHistoryFile, flatGroupName, hashedPublicKey, newItem, function() {
 		sendEmail(mailOptions, function () {
 			if (inviteeEmails.length == 0) {
 				callback()
@@ -546,11 +681,13 @@ app.post('/inviteToChannel', function(req, res) {
     var readableTeamName = req.body.readableTeamName
 
     var additionalInfo = {}
-    additionalInfo.option = 'channel'
-    additionalInfo.readableTeamName = readableTeamName
 
     var channelPublicKey = stencil.getFileInRepo(publicKeyFile, chosenChannel, hashedPublicKey)
-    getGroupInfo(chosenChannel, channelPublicKey, function(err, channelMeta) {
+    getGroupInfoOnDHT(chosenChannel, channelPublicKey, function(err, channelMeta) {
+
+    	if (channelMeta.content == undefined) {
+    		channelMeta.content = JSON.parse(stencil.getFileInRepo(teamAndNameFile, chosenChannel, hashedPublicKey))[0]
+    	}
 
     	additionalInfo.option = 'channel'
     	additionalInfo.readableTeamName = readableTeamName
@@ -639,8 +776,8 @@ function verifyGroupMeta(groupPublicKey, groupMeta) {
 	return result
 }
 
-function getGroupInfo(groupName, groupPublicKey, callback) {
-	stencil.getGroupInfo(groupName, function(groupMeta) {
+function getGroupInfoOnDHT(groupName, groupPublicKey, callback) {
+	stencil.getGroupInfoOnDHT(groupName, function(groupMeta) {
 		var result = verifyGroupMeta(groupPublicKey, groupMeta)
 		if (result) {
 			callback(null, groupMeta)
@@ -695,26 +832,19 @@ app.get('/acceptInvitationToChannel', function(req, res) {
 	var hashedInviteePublicKey = calculateHash(inviteePublicKey)
 
 	acceptInvitation(hashedInviteePublicKey, encodedGroupPublicKey, undefined, flatChannelName, invitationID, inviteePrivateKey, function(readableTeamName, flatTeamName) {
-		
-		getGroupInfo(flatChannelName, decodeURIComponent(encodedGroupPublicKey), function(err, groupMeta) {
-			if (err != null) {
-				res.end(err)
-			} else {
 
-				var normalMems = JSON.parse(stencil.getFileInRepo(normalMemList, flatChannelName, hashedInviteePublicKey))
+		var memList = JSON.parse(stencil.getFileInRepo(memListFile, flatChannelName, hashedInviteePublicKey))
 
-				var data = {}
-				data.hashedPublicKey = hashedInviteePublicKey
-				data.username = findUsernameFromMemList(normalMems, hashedInviteePublicKey)
-				data.readableTeamName = readableTeamName
-				data.flatTeamName = flatTeamName
-				data.flatCName = flatChannelName
+		var data = {}
+		data.hashedPublicKey = hashedInviteePublicKey
+		data.username = findUsernameFromMemList(memList, hashedInviteePublicKey)
+		data.readableTeamName = readableTeamName
+		data.flatTeamName = flatTeamName
+		data.flatCName = flatChannelName
 
-				stencil.getFileFromTorrent(userMsgLogs, flatChannelName, hashedInviteePublicKey, function(value) {
-					data.msgs = value
-					sendPages(res, data, '/homepage/channels/renderChannel')
-				})
-			}
+		stencil.getFileFromTorrent(userMsgLogs, flatChannelName, hashedInviteePublicKey, function(value) {
+			data.msgs = value
+			sendPages(res, data, '/homepage/channels/renderChannel')
 		})
 	})
 })
@@ -777,29 +907,25 @@ function acceptInvitation(hashedInviteePublicKey, encodedGroupPublicKey, usernam
 	var groupPublicKey = decodeURIComponent(encodedGroupPublicKey)
 	var data = {}
 
-	getGroupInfo(flatGroupName, groupPublicKey, function(err, groupMeta) {
+	getGroupInfoOnDHT(flatGroupName, groupPublicKey, function(err, groupMeta) {
 		if (err != null) {
 			res.end(err)
 		} else {
 			//For now I only try to find one creator or moderator to allow the new user to join
 			//But actually, it should be some or all moderators and creator
 			var groupMems = groupMeta.groupMems
-			var moderatorHashedPublicKey
-			for (var i in groupMems) {
-				var roles = groupMems[i].role
-				if (_.indexOf(roles, 'creator') != -1 || _.indexOf(roles, 'moderator') != -1) {
-					moderatorHashedPublicKey = groupMems[i].hashedPublicKey
-					break
-				}
-			}
+			var moderatorHashedPublicKey = groupMems[0].hashedPublicKey
 
 			//hardcode the address of the moderator for now, as we don't have mapping from userID to location
 			var moderatorAddr = 'localhost'
 
-			joinGroupReq(username, flatGroupName, moderatorHashedPublicKey, moderatorAddr, invitationID, hashedInviteePublicKey, inviteePrivateKey, function (err1) {
-				if (err1 != null) {
-					res.end(err1)
+			joinGroupReq(username, flatGroupName, moderatorHashedPublicKey, moderatorAddr, invitationID, hashedInviteePublicKey, inviteePrivateKey, function (err) {
+				if (err != null) {
+					res.end(err)
 				} else {
+					if (groupMeta.content == undefined) {
+						groupMeta.content = JSON.parse(stencil.getFileInRepo(teamAndNameFile, flatGroupName, hashedInviteePublicKey))[0]
+					}
 					callback(groupMeta.content.name, groupMeta.content.teamName)
 				}
 			})	
@@ -836,6 +962,7 @@ function joinGroupReq(username, flatGroupName, moderatorHashedPublicKey, moderat
 		   //  key: fs.readFileSync('client.pem')
 	    // }
 	}, function (err, reply, body) {
+
 		if (!err && reply.statusCode == 200) {
 			var res = JSON.parse(body)
 
@@ -877,23 +1004,37 @@ function joinGroupReq(username, flatGroupName, moderatorHashedPublicKey, moderat
 						}
 					})
 				} else {
-					var generalChannel = res.generalChannel
+					var channelType = res.channelType
 
-					getUserInfo(hashedInviteePublicKey, function(err1, usermeta) {
-						if (err1 != null) {
-							callback(err1)
-						} else {
-							stencil.updateUserInfo(hashedInviteePublicKey, usermeta, flatGroupName, 'add group', inviteePrivateKey, function() {
+					if (channelType == 'public') {
+						getUserInfo(hashedInviteePublicKey, function(err1, usermeta) {
+							if (err1 != null) {
+								callback(err1)
+							} else {
+								stencil.updateUserInfo(hashedInviteePublicKey, usermeta, flatGroupName, 'add group', inviteePrivateKey, function() {
 
-								stencil.cloneGroupRepo(hashedInviteePublicKey, serverPath, flatGroupName, function() {
+									stencil.cloneGroupRepo(hashedInviteePublicKey, serverPath, flatGroupName, function() {
 
-									callback(null)
-										
+										callback(null)
+											
+									})
+
 								})
+							}
+						})
+					} else {
 
+						addContentToJSONFileLocally(hashedInviteePublicKey + '/' + privateChannelsFile, flatGroupName, function(err) {
+							
+							stencil.cloneGroupRepo(hashedInviteePublicKey, serverPath, flatGroupName, function() {
+
+								callback(null)
+									
 							})
-						}
-					})
+
+						})
+					}
+					
 				}
 			}
 			else {
@@ -917,19 +1058,66 @@ function getSignature(value, privateKey) {
 	return sign.sign(privateKey, 'hex')
 }
 
+function findUsernameFromMemList(memList, hashedInviteePublicKey) {
+	for (var i in memList) {
+		if (memList[i].hashedPublicKey == hashedInviteePublicKey) {
+			return memList[i].username
+		}
+	}
+	return undefined
+}
+
+function findUsernameStartingFromChannel(hashedPublicKey, flatChannelName, hashedPublicKeyToBeCompared, callback) {
+	var channelPublicKey = stencil.getFileInRepo(publicKeyFile, flatChannelName, hashedPublicKey)
+	var channelType
+	getGroupInfoOnDHT(flatChannelName, channelPublicKey, function(err, channelMeta) {
+		if (err != null) {
+			callback(err)
+		} else {
+			if (channelMeta.content == undefined) {
+				channelMeta.content = JSON.parse(stencil.getFileInRepo(teamAndNameFile, flatChannelName, hashedPublicKey))[0]
+				channelType = 'private'
+			} else {
+				channelType = 'public'
+			}
+			var teamName = channelMeta.content.teamName
+			var memList = JSON.parse(stencil.getFileInRepo(memListFile, teamName, hashedPublicKey))
+			var username = findUsernameFromMemList(memList, hashedPublicKeyToBeCompared)
+			callback(null, username, channelType)
+		}
+	})
+}
+
+function joinChannelRes(hashedInviteePublicKey, SSHPublicKey, flatChannelName, moderatorHashedPublicKey, callback) {	
+	findUsernameStartingFromChannel(moderatorHashedPublicKey, flatChannelName, hashedInviteePublicKey, function(err, username, channelType) {
+		if (err != null) {
+			callback(err)
+		} else {
+			var newMem = {}
+			newMem.username = username
+			newMem.hashedPublicKey = hashedInviteePublicKey
+
+			addNormalMemToGroup(flatChannelName, moderatorHashedPublicKey, newMem, SSHPublicKey, hashedInviteePublicKey, function(serverPath, knownHostsKey) {
+				
+				callback(null, serverPath, knownHostsKey, channelType)
+			})
+		}
+	})
+}
+
 function appendToNormalMemList(groupName, hashedPublicKey, newNormalMem, callback) {
-	var content = stencil.getFileInRepo(normalMemList, groupName, hashedPublicKey)
+	var content = stencil.getFileInRepo(memListFile, groupName, hashedPublicKey)
 
 	if (content == undefined) {
 		var normalMems = []
 		normalMems.push(newNormalMem)
-		stencil.createOrUpdateFileInRepo(hashedPublicKey, normalMemList, groupName, JSON.stringify(normalMems), 'create', function() {
+		stencil.createOrUpdateFileInRepo(hashedPublicKey, memListFile, groupName, JSON.stringify(normalMems), 'create', function() {
 			callback()
 		})
 	} else {
 		var normalMems = JSON.parse(content)
 		normalMems.push(newNormalMem)
-		stencil.createOrUpdateFileInRepo(hashedPublicKey, normalMemList, groupName, JSON.stringify(normalMems), 'update', function() {
+		stencil.createOrUpdateFileInRepo(hashedPublicKey, memListFile, groupName, JSON.stringify(normalMems), 'update', function() {
 			callback()
 		})
 	}
@@ -944,103 +1132,37 @@ function addNormalMemToGroup(groupName, moderatorHashedPublicKey, newNormalMem, 
 	})
 }
 
-function findUsernameFromMemList(memList, hashedInviteePublicKey) {
-	for (var i in memList) {
-		if (memList[i].hashedPublicKey == hashedInviteePublicKey) {
-			return memList[i].username
-		}
-	}
-	return undefined
-}
-
-function findUsernameStartingFromChannel(hashedPublicKey, flatChannelName, hashedPublicKeyToBeCompared, callback) {
-	var channelPublicKey = stencil.getFileInRepo(publicKeyFile, flatChannelName, hashedPublicKey)
-	getGroupInfo(flatChannelName, channelPublicKey, function(err, channelMeta) {
-		if (err != null) {
-			callback(err)
-		} else {
-			var teamName = channelMeta.content.teamName
-			var teamPublicKey = stencil.getFileInRepo(publicKeyFile, teamName, hashedPublicKey)
-			getGroupInfo(teamName, teamPublicKey, function(err1, teamMeta) {
-				if (err1 != null) {
-					callback(err1)
-				} else {
-					var username
-					var privilegedTeamMems = teamMeta.groupMems
-					username = findUsernameFromMemList(privilegedTeamMems, hashedPublicKeyToBeCompared)
-					if (username != undefined) {
-						callback(null, username)
-					} else {
-						var normalTeamMems = JSON.parse(stencil.getFileInRepo(normalMemList, teamName, hashedPublicKey))
-						username = findUsernameFromMemList(normalTeamMems, hashedPublicKeyToBeCompared)
-						callback(null, username)
-					}
-				}
-			})	
-		}
-	})
-}
-
-function joinChannelRes(hashedInviteePublicKey, SSHPublicKey, flatChannelName, moderatorHashedPublicKey, callback) {	
-	findUsernameStartingFromChannel(moderatorHashedPublicKey, flatChannelName, hashedInviteePublicKey, function(err, username) {
-		if (err != null) {
-			callback(err)
-		} else {
-			var newMem = {}
-			newMem.username = username
-			newMem.hashedPublicKey = hashedInviteePublicKey
-
-			addNormalMemToGroup(flatChannelName, moderatorHashedPublicKey, newMem, SSHPublicKey, hashedInviteePublicKey, function(serverPath, knownHostsKey) {
-				
-				callback(null, serverPath, knownHostsKey)
-			})
-		}
-	})
-}
-
 function joinTeamRes(username, hashedInviteePublicKey, SSHPublicKey, flatTeamName, moderatorHashedPublicKey, callback) {
 	var newMem = {}
 	newMem.username = username
 	newMem.hashedPublicKey = hashedInviteePublicKey
+	newMem.role = []
+	newMem.role.push('normal')
 
 	addNormalMemToGroup(flatTeamName, moderatorHashedPublicKey, newMem, SSHPublicKey, hashedInviteePublicKey, function() {
 
 		var generalChannelFlatName
-		var find = false
-		getUserInfo(moderatorHashedPublicKey, function(err, usermeta){
+		var channelsUserIn = []
+		getUserInfo(moderatorHashedPublicKey, function(err, usermeta) {
 			if (err != null) {
 				callback(err)
 			} else {
-				for (var i in usermeta.groups) {
-					var done = false
-					var groupName = usermeta.groups[i]
+				findChannelsUserIn(moderatorHashedPublicKey, flatTeamName, usermeta.groups, channelsUserIn, function(err, channelsUserIn) {
 
-					var groupPublicKey = stencil.getFileInRepo(publicKeyFile, groupName, moderatorHashedPublicKey)
-
-					getGroupInfo(groupName, groupPublicKey, function(err1, groupMeta) {
-						if (err1 != null) {
-							done = true
-							callback(err1)
+					for (var i in channelsUserIn) {
+						if (channelsUserIn[i].readableName == 'general') {
+							generalChannelFlatName = channelsUserIn[i].flatName
 						}
-						if (groupMeta.content.name == 'general' && groupMeta.content.teamName == flatTeamName) {
-							generalChannelFlatName = groupName
-							find = true
-						}
-						done = true
-					})
-					deasync.loopWhile(function(){return !done})
-					if (find) {
-						break
 					}
-				}
 
-				addNormalMemToGroup(generalChannelFlatName, moderatorHashedPublicKey, newMem, SSHPublicKey, hashedInviteePublicKey, function(serverPath, knownHostsKey) {
+					addNormalMemToGroup(generalChannelFlatName, moderatorHashedPublicKey, newMem, SSHPublicKey, hashedInviteePublicKey, function(serverPath, knownHostsKey) {
 
-					callback(null, serverPath, knownHostsKey, generalChannelFlatName)
+						callback(null, serverPath, knownHostsKey, generalChannelFlatName)
 
+					})
 				})
-			}
 
+			}
 		})
 
 	})
@@ -1087,13 +1209,14 @@ app.post('/joinGroupRes', function(req, res) {
 					}
 				})
 			} else {
-				joinChannelRes(hashedInviteePublicKey, SSHPublicKey, flatGroupName, moderatorHashedPublicKey, function(err, serverPath, knownHostsKey) {
+				joinChannelRes(hashedInviteePublicKey, SSHPublicKey, flatGroupName, moderatorHashedPublicKey, function(err, serverPath, knownHostsKey, channelType) {
 					
 					if (err != null) {
 						res.end(err)
 					} else {
 						var response = {}
 						response.type = 'Accept'
+						response.channelType = channelType
 						response.knownHostsKey = knownHostsKey
 						response.serverPath = serverPath
 						res.write(JSON.stringify(response))
@@ -1113,50 +1236,9 @@ app.post('/joinGroupRes', function(req, res) {
 	}
 })
 
-function findAllGroupMems(flatGroupName, hashedPublicKey, callback) {
-	var groupPublicKey = stencil.getFileInRepo(publicKeyFile, flatGroupName, hashedPublicKey)
-	getGroupInfo(flatGroupName, groupPublicKey, function(err, groupMeta) {
-		if (err != null) {
-			callback(err)
-		} else {
-			var content = stencil.getFileInRepo(normalMemList, flatGroupName, hashedPublicKey)
-			if (content != undefined) {
-				var normalMems = JSON.parse(content)
-			} else {
-				var normalMems = []
-			}
-			var allGroupMems = _.union(groupMeta.groupMems, normalMems)
-			callback(null, allGroupMems)
-		}
-	})
-}
-
-function findChannelsUserIn(hashedPublicKey, flatTeamName, groups, channelsUserIn, callback) {
-	var groupName = groups[0]
-	var channelMeta = {}
-
-	var groupPublicKey = stencil.getFileInRepo(publicKeyFile, groupName, hashedPublicKey)
-
-	getGroupInfo(groupName, groupPublicKey, function(err, groupMeta) {
-		if (err != null) {
-			callback(err)
-		} else {
-			if (groupMeta.content.teamName == flatTeamName && groupName != flatTeamName) {
-				channelMeta.flatName = groupName
-				channelMeta.readableName = groupMeta.content.name
-				channelMeta.description = groupMeta.description
-				channelMeta.type = 'public'
-				channelMeta.status = 'in'
-				channelsUserIn.push(channelMeta)
-			}
-			groups = _.rest(groups)
-			if (groups.length != 0) {
-				findChannelsUserIn(hashedPublicKey, flatTeamName, groups, channelsUserIn, callback)
-			} else {
-				callback(null, channelsUserIn)
-			}
-		}
-	})
+function findAllGroupMems(flatGroupName, hashedPublicKey) {
+	return JSON.parse(stencil.getFileInRepo(memListFile, flatGroupName, hashedPublicKey))
+	
 }
 
 function getDifferenceOfChannels(channelsUserOneIn, channelsUserTwoIn) {
@@ -1185,7 +1267,8 @@ function findPublicChannelsUserNotIn(hashedPublicKey, flatTeamName, publicChanne
 		if (err != null) {
 			callback(err)
 		} else {
-			findChannelsUserIn(groupMem.hashedPublicKey, flatTeamName, usermeta.groups, channelsOneUserIn, function(err, channelsOneUserIn) {
+
+			findChannelsUserIn(hashedPublicKey, flatTeamName, usermeta.groups, channelsOneUserIn, function(err, channelsOneUserIn) {
 				if (err != null) {
 					callback(err)
 				} else {
@@ -1203,6 +1286,40 @@ function findPublicChannelsUserNotIn(hashedPublicKey, flatTeamName, publicChanne
 	
 }
 
+function findChannelsUserIn(hashedPublicKey, flatTeamName, groups, channelsUserIn, callback) {
+	var groupName = groups[0]
+	var channelMeta = {}
+
+	var groupPublicKey = stencil.getFileInRepo(publicKeyFile, groupName, hashedPublicKey)
+
+	getGroupInfoOnDHT(groupName, groupPublicKey, function(err, groupMeta) {
+		if (err != null) {
+			callback(err)
+		} else {
+			if (groupMeta.content == undefined) {
+				groupMeta.content = JSON.parse(stencil.getFileInRepo(teamAndNameFile, groupName, hashedPublicKey))[0]
+				channelMeta.type = 'private'
+			} else {
+				channelMeta.type = 'public'
+			}
+
+			if (groupMeta.content.teamName == flatTeamName && groupName != flatTeamName) {
+				channelMeta.flatName = groupName
+				channelMeta.readableName = groupMeta.content.name
+				channelMeta.status = 'in'
+				channelsUserIn.push(channelMeta)
+			}
+			groups = _.rest(groups)
+			if (groups.length != 0) {
+				findChannelsUserIn(hashedPublicKey, flatTeamName, groups, channelsUserIn, callback)
+			} else {
+				callback(null, channelsUserIn)
+			}
+
+		}
+	})
+}
+
 function findAllChannels(hashedPublicKey, flatTeamName, callback) {
 	var channelsUserIn = []
 	var publicChannelsUserNotIn = []
@@ -1211,27 +1328,36 @@ function findAllChannels(hashedPublicKey, flatTeamName, callback) {
 			callback(err)
 		} else {
 
-			findChannelsUserIn(hashedPublicKey, flatTeamName, usermeta.groups, channelsUserIn, function(err, channelsUserIn) {
-				if (err != null) {
-					callback(err)
-				} else {
-					findAllGroupMems(flatTeamName, hashedPublicKey, function(err, groupMems) {
-						if (err != null) {
-							callback(err)
-						} else {
-							findPublicChannelsUserNotIn(hashedPublicKey, flatTeamName, publicChannelsUserNotIn, channelsUserIn, groupMems, function(err, publicChannelsUserNotIn) {
-								if (err != null) {
-									callback(err)
-								} else {
-									callback(null, _.union(channelsUserIn, publicChannelsUserNotIn))
-								}
-							})
-						}
+			findAllPrivateChannels(hashedPublicKey + '/' + privateChannelsFile, function(allPrivateChannels) {
 
-					})
-		
-				}
+				findChannelsUserIn(hashedPublicKey, flatTeamName, _.union(usermeta.groups, allPrivateChannels), channelsUserIn, function(err, channelsUserIn) {
+
+					if (err != null) {
+						callback(err)
+					} else {
+						var groupMems = findAllGroupMems(flatTeamName, hashedPublicKey) 
+							
+						findPublicChannelsUserNotIn(hashedPublicKey, flatTeamName, publicChannelsUserNotIn, channelsUserIn, groupMems, function(err, publicChannelsUserNotIn) {
+							if (err != null) {
+								callback(err)
+							} else {
+								callback(null, _.union(channelsUserIn, publicChannelsUserNotIn))
+							}
+						})
+			
+					}
+				})
 			})
+		}
+	})
+}
+
+function findAllPrivateChannels(filePath, callback) {
+	fs.readFile(filePath, 'utf8', function(err, unprocessedFileContent) {
+		if (unprocessedFileContent == undefined) {
+			callback([])
+		} else {
+			callback(JSON.parse(unprocessedFileContent))
 		}
 	})
 }
@@ -1266,16 +1392,20 @@ function sendPages(res, data, type) {
 					res.end(err)
 				} else {
 					var displayedChannels = []
-					findChannelsUserIn(hashedPublicKey, data.flatTeamName, usermeta.groups, displayedChannels, function(err, displayedChannels) {
-						if (err != null) {
-							callback(err)
-						} else {
-							res.render('homepage', { username: JSON.stringify(data.username), hashedPublicKey: JSON.stringify(hashedPublicKey), 
-											readableTeamName: JSON.stringify(data.readableTeamName), flatTeamName: JSON.stringify(data.flatTeamName),
-											channels: JSON.stringify(displayedChannels), page: JSON.stringify(type),
-											msgs: JSON.stringify(data.msgs), chosenChannel: JSON.stringify(data.flatCName)
-							})
-						}
+
+					findAllPrivateChannels(hashedPublicKey + '/' + privateChannelsFile, function(allPrivateChannels) {
+
+						findChannelsUserIn(hashedPublicKey, data.flatTeamName, _.union(usermeta.groups, allPrivateChannels), displayedChannels, function(err, displayedChannels) {
+							if (err != null) {
+								callback(err)
+							} else {
+								res.render('homepage', { username: JSON.stringify(data.username), hashedPublicKey: JSON.stringify(hashedPublicKey), 
+												readableTeamName: JSON.stringify(data.readableTeamName), flatTeamName: JSON.stringify(data.flatTeamName),
+												channels: JSON.stringify(displayedChannels), page: JSON.stringify(type),
+												msgs: JSON.stringify(data.msgs), chosenChannel: JSON.stringify(data.flatCName)
+								})
+							}
+						})
 					})
 				}
 			})
@@ -1312,6 +1442,7 @@ app.post('/browseAllChannels', function(req, res) {
 			data.allChannels = allChannels
 
 			sendPages(res, data, '/homepage/channels/browseAllChannels')
+
 		}
 	})
 })

@@ -153,7 +153,6 @@ function getSignature(value, privateKey) {
 
 exports.createUser = function (userID, privateKey, publicKey, callback) {
 	var usermeta = {}
-	usermeta.ts = new Date()
 	usermeta.groups = []
 	usermeta.publicKey = publicKey
 
@@ -460,9 +459,8 @@ function calculateHash(value) {
 	return hash.digest('hex')
 }
 
-exports.createGroup = function (meta, callback) {
+exports.putOnGroupDHT = function (meta, callback) {
 	var creatorPublicKey = meta.creatorPublicKey
-	var creatorPrivateKey = meta.creatorPrivateKey
 	var groupName = meta.groupName
 	var serverAddr = meta.remote
 
@@ -473,52 +471,36 @@ exports.createGroup = function (meta, callback) {
 
 	mkdirp.sync(dir)
 
-	userDHT.connect(userDHTSeed, function(err) {
-		userDHT.get(hashedPublicKey, function(err, usermeta) {
-			if (err != null) {
-				callback(err)
-			} else {
-				if (!fs.existsSync(adminFilePath)) {
-					cloneRepo(adminLocation, dir)
-				}
+	if (!fs.existsSync(adminFilePath)) {
+		cloneRepo(adminLocation, dir)
+	}
 
-				updateUserInfo(hashedPublicKey, usermeta, groupName, 'add group', creatorPrivateKey, function() {
+	groupDHT.connect(groupDHTSeed, function(err) {
+		var groupMeta = {}
+		var repoName = getRepoNameFromGroupName(groupName)
+		var dir1 = hashedPublicKey + '/' + joinedGroupsDir + '/'
+		var repoLocation = serverAddr + ':' + repoName
 
-					groupDHT.connect(groupDHTSeed, function(err) {
-						var groupMeta = {}
-						var repoName = getRepoNameFromGroupName(groupName)
-						var dir1 = hashedPublicKey + '/' + joinedGroupsDir + '/'
-						var repoLocation = serverAddr + ':' + repoName
-						groupMeta.groupMems = []
-						groupMeta.groupMems[0] = {}
-						groupMeta.groupMems[0].username = meta.username
-						groupMeta.groupMems[0].hashedPublicKey = hashedPublicKey
-						groupMeta.groupMems[0].role = []
-						groupMeta.groupMems[0].role[0] = 'creator'
-						groupMeta.description = meta.description
-						groupMeta.ts = new Date()
-						groupMeta.content = {}
-						groupMeta.content.teamName = meta.teamName
-						groupMeta.content.name = meta.name
-						groupMeta.signature = getSignature(JSON.stringify(groupMeta), meta.privateKey)
+		groupMeta.groupMems = []
+		groupMeta.groupMems[0] = {}
+		groupMeta.groupMems[0].hashedPublicKey = hashedPublicKey
 
-						if (meta.groupType == 'private') {
-							
-						}
+		if (meta.groupType == 'public') {
+			groupMeta.content = {}
+			groupMeta.content.teamName = meta.teamName
+			groupMeta.content.name = meta.readableName
+		}
+		groupMeta.signature = getSignature(JSON.stringify(groupMeta), meta.privateKey)
 
-						if (!fs.existsSync(hashedPublicKey + '/' + joinedGroupsDir)) {
-							mkdirp.sync(hashedPublicKey + '/' + joinedGroupsDir)
-						}
-						changePulicKeyFileName(dir, hashedPublicKey)
-						addRepo(repoName, dir + confDir + confFile, hashedPublicKey, dir + confDir)
-						cloneRepo(repoLocation, dir1)
+		if (!fs.existsSync(hashedPublicKey + '/' + joinedGroupsDir)) {
+			mkdirp.sync(hashedPublicKey + '/' + joinedGroupsDir)
+		}
+		changePulicKeyFileName(dir, hashedPublicKey)
+		addRepo(repoName, dir + confDir + confFile, hashedPublicKey, dir + confDir)
+		cloneRepo(repoLocation, dir1)
 
-						groupDHT.put(groupName, groupMeta, function(){
-							callback()
-						})
-					})
-				})
-			}
+		groupDHT.put(groupName, groupMeta, function(){
+			callback()
 		})
 	})
 }
@@ -541,7 +523,7 @@ exports.cloneGroupRepo = function(userID, serverPath, teamName, callback) {
 	callback()
 }
 
-exports.getGroupInfo = function (groupName, callback) {
+exports.getGroupInfoOnDHT = function (groupName, callback) {
 	groupDHT.connect(groupDHTSeed, function(err) {
 		groupDHT.get(groupName, function(err, value){
 			callback(value)
