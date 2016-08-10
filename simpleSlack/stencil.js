@@ -485,11 +485,6 @@ exports.putOnGroupDHT = function (meta, callback) {
 		groupMeta.groupMems[0] = {}
 		groupMeta.groupMems[0].hashedPublicKey = hashedPublicKey
 
-		if (meta.groupType == 'public') {
-			groupMeta.content = {}
-			groupMeta.content.teamName = meta.teamName
-			groupMeta.content.name = meta.readableName
-		}
 		groupMeta.signature = getSignature(JSON.stringify(groupMeta), meta.privateKey)
 
 		if (!fs.existsSync(hashedPublicKey + '/' + joinedGroupsDir)) {
