@@ -5,5 +5,5 @@ var dht = new kad.Node({
     address: '127.0.0.1',
     port: 8200
   })),
-  storage: kad.storage.FS('db3')
+  storage: kad.storage.FS('db1')
 });

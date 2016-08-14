@@ -246,18 +246,30 @@ function getChannels() {
     $("#getChannelsButton").trigger('click')
 }
 
-function newChannel() {
+function newPrivateChannel() {
     var newChannelForm = '<form action="http://localhost:3000/newChannel" method="post" id="newChannel">'
     newChannelForm += 'Name: <input type="text" name="channelName"><br><br>'
     newChannelForm += "<input type='hidden' name='hashedPublicKey' value=" + hashedPublicKey + ">"
     newChannelForm += "<input type='hidden' name='flatTeamName' value="+ flatTeamName +">"
     newChannelForm += "<input type='hidden' name='readableTeamName' value="+ readableTeamName +">"
     newChannelForm += "<input type='hidden' name='username' value="+ username +">"
-    newChannelForm += 'Type of Channel:<br>'
-    newChannelForm += '<input type="radio" name="type" value="public">Public<br>'
-    newChannelForm += '<input type="radio" name="type" value="private">Private<br><br>'
-    newChannelForm += 'Remote to put the repo:<br>'
-    newChannelForm += '<input type="text" name="remote" placeholder="git@localhost"><br><br>'
+    newChannelForm += "<input type='hidden' name='type' value='private channel'>"
+    newChannelForm += 'Server to put the repo:<br>'
+    newChannelForm += '<input type="text" name="serverAddr" placeholder="git@localhost"><br><br>'
+    newChannelForm += 'Purpose:<br>'
+    newChannelForm += '<textarea rows="6" cols="50" name="purpose" form="newChannel"></textarea><br>'
+    newChannelForm += "<input type='submit' name='createChannelButton' value='Create Channel' ></form>"
+    document.getElementById("mainSection").innerHTML = newChannelForm
+}
+
+function newPublicChannel() {
+    var newChannelForm = '<form action="http://localhost:3000/newChannel" method="post" id="newChannel">'
+    newChannelForm += 'Name: <input type="text" name="channelName"><br><br>'
+    newChannelForm += "<input type='hidden' name='hashedPublicKey' value=" + hashedPublicKey + ">"
+    newChannelForm += "<input type='hidden' name='flatTeamName' value="+ flatTeamName +">"
+    newChannelForm += "<input type='hidden' name='readableTeamName' value="+ readableTeamName +">"
+    newChannelForm += "<input type='hidden' name='username' value="+ username +">"
+    newChannelForm += "<input type='hidden' name='type' value='public channel'>"
     newChannelForm += 'Purpose:<br>'
     newChannelForm += '<textarea rows="6" cols="50" name="purpose" form="newChannel"></textarea><br>'
     newChannelForm += "<input type='submit' name='createChannelButton' value='Create Channel' ></form>"
@@ -320,7 +332,7 @@ function autoScrolling() {
 function renderChatMsgs() {
     var chatMsgs = ''
     for (var i in msgs) {
-        chatMsgs +=  '<p>' + username + ' on ' + msgs[i].ts + ' wrote:</p>'
+        chatMsgs +=  '<p>' + msgs[i].creator + ' on ' + msgs[i].ts + ' wrote:</p>'
         chatMsgs +=  '  <p>' + msgs[i].msg + '</p><br>'
     }
     document.getElementById("chatbox").innerHTML = chatMsgs
