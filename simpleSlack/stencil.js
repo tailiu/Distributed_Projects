@@ -299,6 +299,7 @@ function addKey(adminRepoDir, key, keyName) {
 
 	//This is just a temporary method for the test on the local machine
 	//Try to avoid adding ssh public key to gitolite-admin keydir twice on the local machine
+	
 	var command = 'cat ' + SSHPkPath
 	var SSHPublicKey = childProcess.execSync(command)
 	if (SSHPublicKey == key) {

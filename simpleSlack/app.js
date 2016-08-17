@@ -156,15 +156,9 @@ function getMessageLogContent(repoPath, userID, callback) {
 		})
 	})
 }
-function getMemList(teamNameOrChannelName, userID) {
-	var repoPath = getClonedRepoPath(teamNameOrChannelName, userID)
-	var memListPath = getFilePathInRepo(repoPath, memListFile)
-	var memList = JSON.parse(stencil.getFileFromRepo(memListPath))
-	return memList
-}
 
-function replaceHashedPublicKeyWithUserName(messageLogContent, userID, channelName) {
-	var memList = getMemList(channelName, userID)
+function replaceHashedPublicKeyWithUserName(messageLogContent, userID, teamName) {
+	var memList = getMemList(userID, teamName)
 	
 	for (var i in messageLogContent) {
 		for (var j in memList) {
@@ -194,7 +188,7 @@ app.get('/renderChannel', function(req, res) {
 	var channelRepoPath = getClonedRepoPath(flatCName, hashedPublicKey)
 	stencil.syncRepo(channelRepoPath, function() {
 		getMessageLogContent(channelRepoPath, hashedPublicKey, function(messageLogContent) {
-			data.msgs = replaceHashedPublicKeyWithUserName(messageLogContent, hashedPublicKey, flatCName)
+			data.msgs = replaceHashedPublicKeyWithUserName(messageLogContent, hashedPublicKey, flatTeamName)
 			sendPages(res, data, '/homepage/channels/renderChannel')
 		})
 	})
@@ -212,7 +206,7 @@ app.post('/refreshChannelMsgs', function(req, res) {
 		data.updated = updated
 		if (updated) {
 			getMessageLogContent(channelRepoPath, hashedPublicKey, function(messageLogContent) {
-    			data.msgs = replaceHashedPublicKeyWithUserName(messageLogContent, hashedPublicKey, chosenChannel)
+    			data.msgs = replaceHashedPublicKeyWithUserName(messageLogContent, hashedPublicKey, flatTeamName)
 				var result = '<html>' + JSON.stringify(data) + '</html>'
 				res.end(result)
 			})
@@ -272,7 +266,7 @@ app.post('/userMsg', function(req, res) {
 	data.flatCName = flatCName
 
 	updateMsg(hashedPublicKey, flatCName, message, function(messageLogContent) {
-		data.msgs = replaceHashedPublicKeyWithUserName(messageLogContent, hashedPublicKey, flatCName)
+		data.msgs = replaceHashedPublicKeyWithUserName(messageLogContent, hashedPublicKey, flatTeamName)
 		sendPages(res, data, '/homepage/channels/renderChannel')
 	})
 })
@@ -309,8 +303,8 @@ function createUser(keyPath, callback) {
 	createPublicKeyPair(keyPath)
 	createCertificate(keyPath)
 
-	var publicKey = getPublicKey(keyPath)
-	var	privateKey = getPrivateKey(keyPath)
+	var publicKey = getPublicKeyLocally(keyPath)
+	var	privateKey = getPrivateKeyLocally(keyPath)
 
 	var localUserMeta = {}
 	localUserMeta.ts = new Date()
@@ -329,11 +323,11 @@ function calculateHash(value) {
 	return hash.digest('hex')
 }
 
-function getPrivateKey(keyPath) {
+function getPrivateKeyLocally(keyPath) {
 	return fs.readFileSync(keyPath + '-private.pem', 'utf8')
 }
 
-function getPublicKey(keyPath) {
+function getPublicKeyLocally(keyPath) {
 	var publicKey
 	try {
 		publicKey = fs.readFileSync(keyPath + '-public.pem', 'utf8')
@@ -361,23 +355,104 @@ function addContentToJSONFileLocally(filePath, addedContent, callback) {
 	})
 }
 
-function createTeamOrChannel(userID, serverAddr, email, description, readableName, username, teamName, option, callback) {
+function whetherCanCreatePublicChannel(userID, teamName) {
+	var memList = getMemList(userID, teamName)
+	var memberInfo = findMemberInfoFromMemList(memList, userID)
+	var role = memberInfo.role
+	if (_.indexOf(role, 'primary owner') != -1) {
+		return true
+	} 
+	return false
+}
+
+function createChannelAndAddUser(teamName, creatorID, moderatorID) {
 	var label = createRandom()
-	name = hashedStencilPublicKey + ':' + hashedSlackPublicKey + ':' + label
-	repoName = label
+	var repoName = label
 
-	createPublicKeyPair(name)
-	var publicKey = getPublicKey(name)
-	var privateKey = getPrivateKey(name)
+	var repoPath = getClonedRepoPath(teamName, moderatorID)
+	var serverAddr = stencil.getServerAddr(repoPath)
+	var adminRepoDir = getAdminReposDir(moderatorID, serverAddr)
 
+	stencil.createRepo(adminRepoDir, repoName, creatorID)
+
+	var channelName = hashedStencilPublicKey + ':' + hashedSlackPublicKey + ':' + label
+	return channelName
+}
+
+app.post('/publicChannelCreation', function(req, res) {
+	var creatorID = req.body.creatorID
+	var	flatTeamName = req.body.flatTeamName
+	var	moderatorID = req.body.moderatorID
+
+	var channelName = createChannelAndAddUser(flatTeamName, creatorID, moderatorID)
+	
+	var response = {}
+	response.type = 'OK'
+	response.channelName = channelName
+	res.write(JSON.stringify(response))
+	res.end()
+})
+
+function reqToCreatePublicChannel(moderatorInfo, creatorID, purpose, readableName, flatTeamName, callback) {
+	var url = 'http://' + moderatorInfo.address + ':' + httpListeningPort + '/publicChannelCreation'
+
+	var data = {
+		creatorID: creatorID,
+		flatTeamName: flatTeamName,
+		moderatorID: moderatorInfo.hashedPublicKey    //This para is just for testing where mulitple users on the same machine
+	}
+
+	request({
+    	url: url, 
+    	method: 'POST',
+    	form: data
+	}, function (err, reply, body) {
+		if (!err && reply.statusCode == 200) {
+			var res = JSON.parse(body)
+			if (res.type == 'OK') {
+				var channelName = res.channelName
+				prepareAndThenCreateChannel(creatorID, purpose, readableName, undefined, flatTeamName, 'public channel', channelName, function(){
+					callback()
+				})
+			}
+		}
+		//The moderator might not be online
+		else if (err != null) {
+			callback(err)
+		}
+	})
+}
+
+function prepareAndThenCreateChannel(userID, description, readableName, serverAddr, teamName, channelType, channelName, callback) {
+	if (channelType == 'public channel') {
+		var repoPath = getClonedRepoPath(teamName, userID)
+		serverAddr = stencil.getServerAddr(repoPath)
+	}
+
+	createTeamOrChannel(userID, serverAddr, undefined, description, readableName, undefined, teamName, channelType, channelName, function() {
+		callback()
+	})
+}
+
+function createTeamOrChannel(userID, serverAddr, email, description, readableName, username, teamName, option, name, callback) {
+	var needToCreateRepo = false
+
+	if (name == undefined) {
+		var label = createRandom()
+		name = hashedStencilPublicKey + ':' + hashedSlackPublicKey + ':' + label
+		var repoName = label
+
+		var adminRepoDir = getAdminReposDir(userID, serverAddr)
+
+		needToCreateRepo = true
+	}
+	var repoPath = getClonedRepoPath(name, userID)
+
+	var metaPath
 	var metaPutInInRepo = {}
 	metaPutInInRepo.description = description			
 	metaPutInInRepo.ts = new Date()
 
-	var adminRepoDir = getAdminReposDir(userID, serverAddr)
-	var repoPath = getClonedRepoPath(name, userID)
-
-	var metaPath
 	if (option == 'team') {
 		metaPutInInRepo.name = readableName
 		metaPath = getFilePathInRepo(repoPath, teamMetaFile)
@@ -391,87 +466,90 @@ function createTeamOrChannel(userID, serverAddr, email, description, readableNam
 		metaPath = getFilePathInRepo(repoPath, channelMetaFile)
 	}
 
-	stencil.createRepo(adminRepoDir, repoName, userID)
+	if (needToCreateRepo) {
+		stencil.createRepo(adminRepoDir, repoName, userID)
+	}
+
+	//It will lead to the error that it cannot clone the directory, 
+	//when the invited user tries to create a public channel
+	//because I am testing on the same machine, different SSH key names with same SSH key value, but
+	//there is only one that can work.....
 	cloneRepo(userID, name, serverAddr)
 	
 	stencil.createOrUpdateFileInRepo(metaPath, JSON.stringify(metaPutInInRepo), 'create', function() {
 
-		var MemListInRepo = []
-		MemListInRepo[0] = {}
-		MemListInRepo[0].username = username
-		MemListInRepo[0].hashedPublicKey = userID
-		MemListInRepo[0].email = email
-		MemListInRepo[0].role = []
-		MemListInRepo[0].role[0] = 'creator'
-
+		var memListInRepo = []
+		memListInRepo[0] = {}
+		if (option == 'team') {
+			memListInRepo[0].email = email
+			memListInRepo[0].role = []
+			memListInRepo[0].role[0] = 'primary owner'
+			memListInRepo[0].username = username
+		} else if (option == 'private channel') {
+			memListInRepo[0].role = []
+			memListInRepo[0].role[0] = 'primary owner'
+		}
+		memListInRepo[0].hashedPublicKey = userID
+		
 		var memListPath = getFilePathInRepo(repoPath, memListFile)
 
-		stencil.createOrUpdateFileInRepo(memListPath, JSON.stringify(MemListInRepo), 'create', function() {
+		stencil.createOrUpdateFileInRepo(memListPath, JSON.stringify(memListInRepo), 'create', function() {
 
-			var publicKeyPath = getFilePathInRepo(repoPath, publicKeyFile)
+			var reposFilePath = getFilePathInUserIDDir(userID, reposFile)
 
-			stencil.createOrUpdateFileInRepo(publicKeyPath, publicKey, 'create', function() {
+			addContentToJSONFileLocally(reposFilePath, name, function() {
 
-				var reposFilePath = getFilePathInUserIDDir(userID, reposFile)
+				if (option == 'public channel') {
+					var channelInfo = {}
+					channelInfo.readableName = readableName
+					channelInfo.flatName = name
 
-				addContentToJSONFileLocally(reposFilePath, name, function() {
+					var teamRepoPath = getClonedRepoPath(teamName, userID)
+					var publicChannelsFilePath = getFilePathInRepo(teamRepoPath, publicChannelsFile)
 
-					if (option == 'general channel') {
-						var channelInfo = {}
-						channelInfo.readableName = readableName
-						channelInfo.flatName = name
+					addContentToJSONFileInRepo(publicChannelsFilePath, channelInfo, function() {
 
-						var teamRepoPath = getClonedRepoPath(teamName, userID)
-						var publicChannelsFilePath = getFilePathInRepo(teamRepoPath, publicChannelsFile)
-
-						addContentToJSONFileInRepo(publicChannelsFilePath, channelInfo, function() {
-
-							createOrUpdateMesageLogContent(userID, [], repoPath, 'create', function() {
-								callback()
-							})
-
+						createOrUpdateMesageLogContent(userID, [], repoPath, 'create', function() {
+							callback()
 						})
-					} else {
-						var metaPutOnDHT = {}
-						metaPutOnDHT.members = []
-						metaPutOnDHT.members[0] = {}
-						metaPutOnDHT.members[0].hashedPublicKey = userID
-						metaPutOnDHT.members[0].address = getLocalIpAddr()
-						metaPutOnDHT.signature = getSignature(JSON.stringify(metaPutOnDHT), privateKey)
 
-						stencil.putValueOnDHT(localDHTNode, DHTSeed, name, metaPutOnDHT, function() {
+					})
+				} else {
+					createPublicKeyPair(name)
+					var publicKey = getPublicKeyLocally(name)
+					var privateKey = getPrivateKeyLocally(name)
 
-							if (option == 'public channel') {
-								var channelInfo = {}
-								channelInfo.readableName = readableName
-								channelInfo.flatName = name
+					var publicKeyPath = getFilePathInRepo(repoPath, publicKeyFile)
 
-								var teamRepoPath = getClonedRepoPath(teamName, userID)
-								var publicChannelsFilePath = getFilePathInRepo(teamRepoPath, publicChannelsFile)
+					var metaPutOnDHT = {}
+					metaPutOnDHT.members = []
+					metaPutOnDHT.members[0] = {}
+					metaPutOnDHT.members[0].hashedPublicKey = userID
+					metaPutOnDHT.members[0].address = getLocalIpAddr()
+					metaPutOnDHT.signature = getSignature(JSON.stringify(metaPutOnDHT), privateKey)
 
-								addContentToJSONFileInRepo(publicChannelsFilePath, channelInfo, function() {
+					stencil.putValueOnDHT(localDHTNode, DHTSeed, name, metaPutOnDHT, function() {
 
-									createOrUpdateMesageLogContent(userID, [], repoPath, 'create', function() {
-										callback()
-									})
-
-								})
-							} else if (option == 'private channel') {
+						stencil.createOrUpdateFileInRepo(publicKeyPath, publicKey, 'create', function() {
+							if (option == 'private channel') {
 								createOrUpdateMesageLogContent(userID, [], repoPath, 'create', function() {
 									callback()
 								})
 							} else {
 								callback(name)
 							}
-							
 						})
-
-					}
-					
-				})
+					})
+				}
 			})
 		})
 	})
+}
+
+function getPublicKeyInRepo(userID, teamName) {
+	var repoPath = getClonedRepoPath(teamName, userID)
+	var publicKeyFilePath = getFilePathInRepo(repoPath, publicKeyFile)
+	return stencil.getFileFromRepo(publicKeyFilePath)
 }
 
 app.post('/newChannel', function(req, res) {
@@ -484,30 +562,45 @@ app.post('/newChannel', function(req, res) {
 	var serverAddr = req.body.serverAddr
 	var purpose = req.body.purpose
 
-	var repoPath = getClonedRepoPath(flatTeamName, hashedPublicKey)
-	if (serverAddr == undefined) {
-		serverAddr = stencil.getServerAddr(repoPath)
+	var data = {}
+	data.flatTeamName = flatTeamName
+	data.readableTeamName = readableTeamName
+	data.username = username
+	data.hashedPublicKey = hashedPublicKey
+
+	if (channelType == 'public channel') {
+		var ableToCreatePublicChannel = whetherCanCreatePublicChannel(hashedPublicKey, flatTeamName)
+		if (!ableToCreatePublicChannel) {
+			var teamPublicKey = getPublicKeyInRepo(hashedPublicKey, flatTeamName)
+
+			getTeamOrChannelInfoOnDHT(flatTeamName, teamPublicKey, function(err, teamMetaOnDHT) {
+				if (err != null) {
+					res.end(err)
+				} else {
+					var moderators = teamMetaOnDHT.members
+					reqToCreatePublicChannel(moderators[0], hashedPublicKey, purpose, readableName, flatTeamName, function(){
+						sendPages(res, data, '/homepage/channels/getChannels')
+					})
+				}
+			})
+		} else {
+			prepareAndThenCreateChannel(hashedPublicKey, purpose, readableName, undefined, flatTeamName, channelType, undefined, function(){
+				sendPages(res, data, '/homepage/channels/getChannels')
+			})
+		}
+	} else {
+		prepareAndThenCreateChannel(hashedPublicKey, purpose, readableName, serverAddr, flatTeamName, channelType, undefined, function(){
+			sendPages(res, data, '/homepage/channels/getChannels')
+		})
 	}
-
-	var email = getUserEamil(flatTeamName, hashedPublicKey)
-
-	createTeamOrChannel(hashedPublicKey, serverAddr, email, purpose, readableName, username, flatTeamName, channelType, function() {
-		var data = {}
-		data.flatTeamName = flatTeamName
-		data.readableTeamName = readableTeamName
-		data.username = username
-		data.hashedPublicKey = hashedPublicKey
-
-		sendPages(res, data, '/homepage/channels/getChannels')
-
-	})
 
 })
 
-function findAllMembers(userID, teamOrChannelName) {
-	var repoPath = getClonedRepoPath(teamOrChannelName, userID)
+function getMemList(userID, teamNameOrChannelName) {
+	var repoPath = getClonedRepoPath(teamNameOrChannelName, userID)
 	var memListPath = getFilePathInRepo(repoPath, memListFile)
-	return JSON.parse(stencil.getFileFromRepo(memListPath))	
+	var memList = JSON.parse(stencil.getFileFromRepo(memListPath))
+	return memList
 }
 
 function getMemberListDifference(listOne, listTwo) {
@@ -532,8 +625,8 @@ app.post('/getChannelInviteeList', function(req, res) {
     var flatTeamName = req.body.flatTeamName
     var chosenChannel = req.body.chosenChannel  
 
-    var teamMems = findAllMembers(hashedPublicKey, flatTeamName)	
-    var channelMems = findAllMembers(hashedPublicKey, chosenChannel)
+    var teamMems = getMemList(hashedPublicKey, flatTeamName)	
+    var channelMems = getMemList(hashedPublicKey, chosenChannel)
     	
     var data = {}
 
@@ -647,7 +740,7 @@ app.post('/createTeam', function(req, res) {
 	//store public key and private key in email-public.pem and email-private.pem respectively.
 	//This is an expedient method to distinguish different users on the local machine for testing use.
 	//In the future, the key should be stored locally in a well-known place
-	creatorPublicKey = getPublicKey(email)
+	creatorPublicKey = getPublicKeyLocally(email)
 	if (creatorPublicKey == undefined) {
 		createUser(email, function(pubKey, priKey) {
 			creatorPublicKey = pubKey
@@ -660,11 +753,11 @@ app.post('/createTeam', function(req, res) {
 
 	var userID = calculateHash(creatorPublicKey)
 
-	createTeamOrChannel(userID, serverAddr, email, description, readableTeamName, username, null, 'team', function(teamName) {
+	createTeamOrChannel(userID, serverAddr, email, description, readableTeamName, username, null, 'team', undefined, function(teamName) {
 
 		var generalChannelDescription = 'team wide communication and announcement'
 		var generalChannelReadableName = 'general'
-		createTeamOrChannel(userID, serverAddr, email, generalChannelDescription, generalChannelReadableName, username, teamName, 'general channel', function() {
+		createTeamOrChannel(userID, serverAddr, email, generalChannelDescription, generalChannelReadableName, username, teamName, 'public channel', undefined, function() {
 
 			var data = {}
 			data.flatTeamName = teamName
@@ -680,10 +773,15 @@ app.post('/createTeam', function(req, res) {
 })
 
 function sendInvitationEmail(flatTeamNameOrChannelName, readableTeamOrChannelName, hashedPublicKey, username, inviteeEmails, additionalInfo, callback) {
-	var repoPath = getClonedRepoPath(flatTeamNameOrChannelName, hashedPublicKey)
-	var publicKeyFilePath = getFilePathInRepo(repoPath, publicKeyFile)
-	var teamOrChannelPublicKey = stencil.getFileFromRepo(publicKeyFilePath)
-	var encodedPublicKey = encodeURIComponent(teamOrChannelPublicKey)
+	var publicKeyRepoPath
+	if (additionalInfo.option == 'team' || additionalInfo.option == 'private') {
+		publicKeyRepoPath = getClonedRepoPath(flatTeamNameOrChannelName, hashedPublicKey)
+	} else {
+		publicKeyRepoPath = getClonedRepoPath(additionalInfo.flatTeamName, hashedPublicKey)
+	}
+	var publicKeyFilePath = getFilePathInRepo(publicKeyRepoPath, publicKeyFile)
+	var teamOrPrivateChannelPublicKey = stencil.getFileFromRepo(publicKeyFilePath)
+	var encodedPublicKey = encodeURIComponent(teamOrPrivateChannelPublicKey)
 
 	var invitationID = createRandom()
 
@@ -722,7 +820,8 @@ function sendInvitationEmail(flatTeamNameOrChannelName, readableTeamOrChannelNam
 	newInvitation.status = 'pending'
 	newInvitation.invitationID = invitationID
 
-	var invitationMetaFilePath = getFilePathInRepo(repoPath, invitationMetaFile)
+	var invitationMetaFileRepoPath = getClonedRepoPath(flatTeamNameOrChannelName, hashedPublicKey)
+	var invitationMetaFilePath = getFilePathInRepo(invitationMetaFileRepoPath, invitationMetaFile)
 
 	addContentToJSONFileInRepo(invitationMetaFilePath, newInvitation, function() {
 		sendEmail(mailOptions, function () {
@@ -735,10 +834,8 @@ function sendInvitationEmail(flatTeamNameOrChannelName, readableTeamOrChannelNam
 	})
 }
 
-function checkAlreadyInTeamOrChannel(email, teamOrChannelName, userID) {
-	var repoPath = getClonedRepoPath(teamOrChannelName, userID)
-	var memListPath = getFilePathInRepo(repoPath, memListFile)
-	var memList = JSON.parse(stencil.getFileFromRepo(memListPath))
+function checkAlreadyInTeam(email, teamName, userID) {
+	var memList = getMemList(userID, teamName)
 	for (var i in memList) {
 		if(memList[i].email == email) {
 			return true
@@ -748,9 +845,7 @@ function checkAlreadyInTeamOrChannel(email, teamOrChannelName, userID) {
 }
 
 function getUserEamil(teamName, userID) {
-	var repoPath = getClonedRepoPath(teamName, userID)
-	var memListPath = getFilePathInRepo(repoPath, memListFile)
-	var members = JSON.parse(stencil.getFileFromRepo(memListPath))
+	var members = getMemList(userID, teamName)
 	for (var i in members) {
 		if (members[i].hashedPublicKey == userID) {
 			return members[i].email
@@ -768,7 +863,6 @@ app.post('/inviteToChannel', function(req, res) {
     var readableTeamName = req.body.readableTeamName
 
     var additionalInfo = {}
-	additionalInfo.option = 'channel'
 	additionalInfo.readableTeamName = readableTeamName
 	additionalInfo.flatTeamName = flatTeamName
 
@@ -790,6 +884,7 @@ app.post('/inviteToChannel', function(req, res) {
 		for (var i in channelsUserIn) {
 			if (channelsUserIn[i].flatName == chosenChannel) {
 				var readableName = channelsUserIn[i].readableName
+				additionalInfo.option = channelsUserIn[i].type
 				break
 			}
 		}
@@ -806,7 +901,7 @@ app.post('/inviteToChannel', function(req, res) {
 			var channelRepoPath = getClonedRepoPath(chosenChannel, hashedPublicKey)
 			stencil.syncRepo(channelRepoPath, function() {
 				getMessageLogContent(channelRepoPath, hashedPublicKey, function(messageLogContent) {
-					data.msgs = replaceHashedPublicKeyWithUserName(messageLogContent, hashedPublicKey, chosenChannel)
+					data.msgs = replaceHashedPublicKeyWithUserName(messageLogContent, hashedPublicKey, flatTeamName)
 					sendPages(res, data, '/homepage/channels/renderChannel')
 				})
 			})
@@ -827,7 +922,7 @@ app.post('/inviteToTeam', function(req, res) {
 	data.username = username
 	data.hashedPublicKey = hashedPublicKey
 
-	var alreadyInTeam = checkAlreadyInTeamOrChannel(inviteeEmail, flatTeamName, hashedPublicKey)
+	var alreadyInTeam = checkAlreadyInTeam(inviteeEmail, flatTeamName, hashedPublicKey)
 
 	if (alreadyInTeam) {
 		sendPages(res, data, '/homepage/team/inviteToTeam/alreadyInTeam')
@@ -865,7 +960,7 @@ app.get('/acceptInvitationToChannel', function(req, res) {
 	var flatTeamName = req.query.team
 
 	//get the local public key, for now, I just hardcode it
-	inviteePublicKey = getPublicKey('tl67@nyu.edu')
+	inviteePublicKey = getPublicKeyLocally('tl67@nyu.edu')
 	
 	var hashedInviteePublicKey = calculateHash(inviteePublicKey)
 
@@ -876,15 +971,15 @@ app.get('/acceptInvitationToChannel', function(req, res) {
 		data.flatTeamName = flatTeamName
 		data.flatCName = flatChannelName
 
-		findUsernameAndEmail(hashedInviteePublicKey, flatTeamName, hashedInviteePublicKey, function(username){
-			data.username = username
+		var memList = getMemList(hashedInviteePublicKey, flatTeamName)
+		var memberInfo = findMemberInfoFromMemList(memList, hashedInviteePublicKey)
+		data.username = memberInfo.username
 
-			var channelRepoPath = getClonedRepoPath(flatChannelName, hashedInviteePublicKey)
-			stencil.syncRepo(channelRepoPath, function() {
-				getMessageLogContent(channelRepoPath, hashedInviteePublicKey, function(messageLogContent) {
-					data.msgs = replaceHashedPublicKeyWithUserName(messageLogContent, hashedInviteePublicKey, flatChannelName)
-					sendPages(res, data, '/homepage/channels/renderChannel')
-				})
+		var channelRepoPath = getClonedRepoPath(flatChannelName, hashedInviteePublicKey)
+		stencil.syncRepo(channelRepoPath, function() {
+			getMessageLogContent(channelRepoPath, hashedInviteePublicKey, function(messageLogContent) {
+				data.msgs = replaceHashedPublicKeyWithUserName(messageLogContent, hashedInviteePublicKey, flatTeamName)
+				sendPages(res, data, '/homepage/channels/renderChannel')
 			})
 		})
 	})
@@ -926,7 +1021,7 @@ app.get('/acceptInvitationToTeam', function(req, res) {
 				done = true
 			})
 		} else {
-			inviteePublicKey = getPublicKey(inviteeEmail)
+			inviteePublicKey = getPublicKeyLocally(inviteeEmail)
 			done = true
 		}
 		deasync.loopWhile(function(){return !done})
@@ -957,11 +1052,27 @@ function getTeamOrChannelInfoOnDHT(teamNameOrChannelName, publicKey, callback) {
 	})
 }
 
+function getTeamOrPrivateChannelInfoOnDHT(teamName, privateChannelName, publicKey, callback) {
+	getTeamOrChannelInfoOnDHT(teamName, publicKey, function(err, metaOnDHT) {
+		if (err != null) {
+			getTeamOrChannelInfoOnDHT(privateChannelName, publicKey, function(err, metaOnDHT) {
+				if (err != null) {
+					callback(err, null)
+				} else {
+					callback(null, metaOnDHT)
+				}
+			})
+		} else {
+			callback(null, metaOnDHT)
+		}
+	})
+}
+
 function acceptInvitation(hashedInviteePublicKey, encodedPublicKey, username, flatTeamNameOrChannelName, invitationID, flatTeamName, inviteeEmail, callback) {
 	var publicKey = decodeURIComponent(encodedPublicKey)
 	var data = {}
 
-	getTeamOrChannelInfoOnDHT(flatTeamNameOrChannelName, publicKey, function(err, metaOnDHT) {
+	getTeamOrPrivateChannelInfoOnDHT(flatTeamName, flatTeamNameOrChannelName, publicKey, function(err, metaOnDHT) {
 		if (err != null) {
 			res.end(err)
 		} else {
@@ -1069,58 +1180,47 @@ function reqToJoin(username, flatName, moderatorHashedPublicKey, moderatorAddr, 
 	})
 }
 
-function findUsernameAndEmailFromMemList(memList, hashedInviteePublicKey, callback) {
-	var username = undefined
-	var email = undefined
+function findMemberInfoFromMemList(memList, hashedInviteePublicKey) {
+	var memberInfo = undefined
 	for (var i in memList) {
 		if (memList[i].hashedPublicKey == hashedInviteePublicKey) {
-			username = memList[i].username
-			email = memList[i].email
+			memberInfo  = memList[i]
+			break
 		}
 	}
-	callback(username, email)
-}
-
-function findUsernameAndEmail(userID, flatTeamName, hashedPublicKeyToBeCompared, callback) {
-	var repoPath = getClonedRepoPath(flatTeamName, userID)
-	var memListFilePath = getFilePathInRepo(repoPath, memListFile)
-	var memList = JSON.parse(stencil.getFileFromRepo(memListFilePath))
-
-	findUsernameAndEmailFromMemList(memList, hashedPublicKeyToBeCompared, function(username, email){
-		callback(username, email)
-	})
+	return memberInfo
 }
 
 function processJoinChannelReq(hashedInviteePublicKey, SSHPublicKey, flatChannelName, moderatorHashedPublicKey, flatTeamName, callback) {	
-	findUsernameAndEmail(moderatorHashedPublicKey, flatTeamName, hashedInviteePublicKey, function(username, email) {
-		var newMem = {}
-		newMem.username = username
-		newMem.hashedPublicKey = hashedInviteePublicKey
-		newMem.email = email
+	var memList = getMemList(moderatorHashedPublicKey, flatChannelName)
+	var newMem = {}
+	newMem.hashedPublicKey = hashedInviteePublicKey
+	if (memList[0].role != undefined) {
+		newMem.role = []
+		newMem.role.push('normal')
+	}
 
-		addMember(flatChannelName, moderatorHashedPublicKey, newMem, SSHPublicKey, hashedInviteePublicKey, function(serverAddr, knownHostKey) {
-			
-			callback(null, serverAddr, knownHostKey)
-		})
+	addMember(flatChannelName, moderatorHashedPublicKey, newMem, SSHPublicKey, hashedInviteePublicKey, function(serverAddr, knownHostKey) {
 		
+		callback(null, serverAddr, knownHostKey)
 	})
 }
 
 function appendToMemList(teamNameOrChannelName, userID, newMem, callback) {
 	var repoPath = getClonedRepoPath(teamNameOrChannelName, userID)
-	var memListFilePath = getFilePathInRepo(repoPath, memListFile)
-	var content = stencil.getFileFromRepo(memListFilePath)
+	var memListPath = getFilePathInRepo(repoPath, memListFile)
+	var content = stencil.getFileFromRepo(memListPath)
 
 	if (content == undefined) {
 		var members = []
 		members.push(newMem)
-		stencil.createOrUpdateFileInRepo(memListFilePath, JSON.stringify(members), 'create', function() {
+		stencil.createOrUpdateFileInRepo(memListPath, JSON.stringify(members), 'create', function() {
 			callback()
 		})
 	} else {
 		var members = JSON.parse(content)
 		members.push(newMem)
-		stencil.createOrUpdateFileInRepo(memListFilePath, JSON.stringify(members), 'update', function() {
+		stencil.createOrUpdateFileInRepo(memListPath, JSON.stringify(members), 'update', function() {
 			callback()
 		})
 	}
@@ -1148,14 +1248,14 @@ function addMember(name, moderatorHashedPublicKey, newMem, SSHPublicKey, newMemH
 }
 
 function processJoinTeamReq(username, hashedInviteePublicKey, SSHPublicKey, flatTeamName, moderatorHashedPublicKey, inviteeEmail, callback) {
-	var newMem = {}
-	newMem.username = username
-	newMem.hashedPublicKey = hashedInviteePublicKey
-	newMem.email = inviteeEmail
-	newMem.role = []
-	newMem.role.push('normal')
+	var newMemAddedToTeamRepo = {}
+	newMemAddedToTeamRepo.username = username
+	newMemAddedToTeamRepo.hashedPublicKey = hashedInviteePublicKey
+	newMemAddedToTeamRepo.email = inviteeEmail
+	newMemAddedToTeamRepo.role = []
+	newMemAddedToTeamRepo.role.push('normal')
 
-	addMember(flatTeamName, moderatorHashedPublicKey, newMem, SSHPublicKey, hashedInviteePublicKey, function() {
+	addMember(flatTeamName, moderatorHashedPublicKey, newMemAddedToTeamRepo, SSHPublicKey, hashedInviteePublicKey, function() {
 		var generalChannelFlatName		
 		findChannelsUserIn(moderatorHashedPublicKey, flatTeamName, function(channelsUserIn) {
 
@@ -1165,7 +1265,10 @@ function processJoinTeamReq(username, hashedInviteePublicKey, SSHPublicKey, flat
 					break
 				}
 			}
-			addMember(generalChannelFlatName, moderatorHashedPublicKey, newMem, SSHPublicKey, hashedInviteePublicKey, function(serverAddr, knownHostKey) {
+			var newMemAddedToGeneralRepo = {}
+			newMemAddedToGeneralRepo.hashedPublicKey = hashedInviteePublicKey
+
+			addMember(generalChannelFlatName, moderatorHashedPublicKey, newMemAddedToGeneralRepo, SSHPublicKey, hashedInviteePublicKey, function(serverAddr, knownHostKey) {
 
 				callback(null, serverAddr, knownHostKey, generalChannelFlatName)
 
@@ -1200,10 +1303,9 @@ app.post('/processAndResToJoinReq', function(req, res) {
 			break
 		}
 	}
+
 	if (found) {
-
 		stencil.createOrUpdateFileInRepo(invitationMetaFilePath, JSON.stringify(fileContent), 'update', function() {
-
 			if (username != undefined) {
 				processJoinTeamReq(username, hashedInviteePublicKey, SSHPublicKey, flatName, moderatorHashedPublicKey, inviteeEmail, function(err, serverAddr, knownHostKey, generalChannelFlatName) {
 					if (err != null) {
@@ -1221,7 +1323,6 @@ app.post('/processAndResToJoinReq', function(req, res) {
 				})
 			} else {
 				processJoinChannelReq(hashedInviteePublicKey, SSHPublicKey, flatName, moderatorHashedPublicKey, flatTeamName, function(err, serverAddr, knownHostKey, channelType) {
-					
 					if (err != null) {
 						res.end(err)
 					} else {
