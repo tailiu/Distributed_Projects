@@ -1,0 +1,20 @@
+{
+  "name": "stencil-forum",
+  "version": "1.0.0",
+  "description": "Forum app uses Stencil storage system",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "init": "node rmLongFiles.js & ./initialize.sh "
+  },
+  "author": "Tai Liu",
+  "license": "ISC",
+  "dependencies": {
+    "body-parser": "^1.14.2",
+    "crypto": "0.0.3",
+    "express": "^4.13.3",
+    "jade": "^1.11.0",
+    "mongoose": "^4.3.4",
+    "underscore": "^1.8.3"
+  }
+}

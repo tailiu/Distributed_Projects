@@ -1,0 +1,26 @@
+doctype html
+html(lang="en")
+  head
+    title Stencil Forum
+    style
+        include ../style/homepage.css
+    script(src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js")
+  body
+    #header
+        h1 Stencil Forum
+    #logoutButton
+        button(type="button", onclick="logout()")|logout(#{username})
+    #nav
+    #buttons
+        button(type="button", id="newPost", onclick="newPost()")|New Post
+        button(type="button", id="tags", onclick="renderTagfield()")|Tags
+        button(type="button", id="views" onclick="renderViewsManagement()")|Views
+        button(type="button", onclick="renderGroupConfig()")|Groups
+    #mainSection
+    script
+        |username = !{username};
+        |hashedPublicKey = !{hashedPublicKey};
+        |page = !{page};
+        |posts = !{posts};
+        |groupName = !{groupName};
+        include ../script/homepage.js

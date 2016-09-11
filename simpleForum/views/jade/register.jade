@@ -1,0 +1,14 @@
+doctype html
+html(lang="en")
+  head
+    title Sign up for Stencil Forum
+    style
+      include ../style/initial.css
+  body.
+    <div class="login">
+      <h1>Sign up</h1>
+      <form method="post" action="http://localhost:3000/register">
+        <p><input type="text" name="username" value="" placeholder="Username"></p>
+        <p><input type="submit" name="login" value="Submit" ></p>
+      </form>
+    </div>
