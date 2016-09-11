@@ -16,26 +16,24 @@ var postsFilePath = util.getDownloadedFilePath(userID, postsFileName)
 var done = true
 
 function lockAndUpdateFile() {
-	lockfile.lock(postsFilePath, function (err, release) {
-	    if (err) {
-	    	setTimeout(function(){
+	lockfile.lock(postsFilePath, function(err, release) {
+		if (err) {
+			setTimeout(function(){
 	    		lockAndUpdateFile()
-	    	}, 1000)
-	    } else {
-	    	util.downloadPosts(groupName, userID, masterView, function() {
-				done = true
+	    	}, backoffTime)
+		} else {
+			var updated = stencil.syncRepo(repoPath, host)
+			if (updated) {
+				util.downloadPosts(groupName, userID, masterView, function() {
+					release()
+				})
+			} else {
 				release()
-			})
-	    }
+			}
+		}
 	})
 }
 
 setInterval(function () {
-	if (done) {
-		var updated = stencil.syncRepo(repoPath, host)
-		if (updated) {
-			done = false
-			lockAndUpdateFile()
-		}
-	}
+	lockAndUpdateFile()
 }, syncCycle)
