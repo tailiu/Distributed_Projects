@@ -55,18 +55,17 @@ function getLocalIpAddr() {
   return networkInterfaces.eth0[0].address
 }
 
-exports.syncRepo = function(repoPath, host) {
-  var command = 'cd ' + repoPath + '\ngit pull ' + host + ' master\n'
-  var result = childProcess.execSync(command)
-
-  if (result.toString().indexOf('Already up-to-date') != -1) {
-    return false
-  } else {
-    return true
+exports.syncLocalAndRemoteBranches = function(repoPath, host, branch, callback) {
+  try {
+    var command = 'cd ' + repoPath + '\ngit pull ' + host + ' ' + branch + '\n'
+    var result = childProcess.execSync(command)
+    callback(null, result.toString())
+  } catch (err) {
+    callback(err.stdout.toString(), null)
   }
 }
 
-exports.getFileFromRepo = function (filePath) {
+exports.getFileFromRepo = function (filePath, host, view) {
   var fileName = getFileNameFromFilePath(filePath)
   var fileDir = getFileDirFromFilePath(filePath, fileName)
 
@@ -76,7 +75,7 @@ exports.getFileFromRepo = function (filePath) {
     return undefined
   }
 
-  var command1 = 'cd ' + fileDir + '\ngit pull origin master\n'
+  var command1 = 'cd ' + fileDir + '\ngit pull ' + host + ' ' + view + '\n'
   childProcess.execSync(command1)
 
   if (!fs.existsSync(filePath)) {
@@ -96,19 +95,18 @@ function getFileDirFromFilePath(path, fileName) {
   return path.replace(fileName, '')
 }
 
-function pushToGitRepo(fileDir, fileName, comment, host, conflictsResolution, callback) {
+function pushToGitRepo(fileDir, fileName, comment, host, branch, callback) {
   try {
     var command = 'cd '+ fileDir + '\ngit add ' +  fileName 
-        + '\ngit commit -m "' + comment + '"\ngit push ' + host + ' master\n'
+        + '\ngit commit -m "' + comment + '"\ngit push ' + host + ' ' + branch + '\n'
     childProcess.execSync(command)
-    var retry = false
-    callback(retry)
+    callback(null)
   } catch (err) {
-    conflictsResolution(err, fileDir, fileName, host, callback)
+    callback(err)
   } 
 }
 
-exports.createOrUpdateFileInRepo = function(filePath, content, option, host, conflictsResolution, callback) {
+exports.createOrUpdateFileInRepo = function(filePath, content, option, host, branch, callback) {
   var fileName = getFileNameFromFilePath(filePath)
   var fileDir = getFileDirFromFilePath(filePath, fileName)
   
@@ -116,7 +114,7 @@ exports.createOrUpdateFileInRepo = function(filePath, content, option, host, con
 
   fs.writeFile(filePath, content, function(err) {
     var comment = option + ' file ' + fileName
-    pushToGitRepo(fileDir, fileName, comment, host, conflictsResolution, callback)
+    pushToGitRepo(fileDir, fileName, comment, host, branch, callback)
   })
 }
 
@@ -180,9 +178,54 @@ exports.createRepo = function(adminRepoDir, repoName, addedkeyName, host) {
   childProcess.execSync(command)
 }
 
-function addRemote(repoPath, keyName, repoName) {
-  var command = 'cd ' + repoPath + '\ngit remote add ' + keyName + ' '  + keyName + ':' + repoName + '\n'
+function addRemote(repoPath, host, repoName) {
+  var command = 'cd ' + repoPath + '\ngit remote add ' + host + ' '  + host + ':' + repoName + '\n'
   childProcess.execSync(command)
+}
+
+function addEntryToConfig(remoteAdminRepoServer, keyName, host) {
+  var command = 'touch ' + SSHConfig
+  childProcess.execSync(command)
+
+  if (getServerAddrFromConfig(host) == undefined) {
+    var user = remoteAdminRepoServer.split('@')[0]
+    var hostName = remoteAdminRepoServer.split('@')[1]
+    var data = 'Host ' + host + '\nHostName ' + hostName + '\nUser ' + user + '\nIdentityFile ' 
+                + SSHKeysDir + keyName + '.pub\nIdentitiesOnly yes\n'
+    fs.appendFileSync(SSHConfig, data)
+  }
+}
+
+function cloneRepoWithSpecificBranch(remoteRepoLocation, localRepoDir, host, keyName, branch, type) {
+  mkdirp.sync(localRepoDir)
+
+  addEntryToConfig(remoteRepoLocation.split(':')[0], keyName, host)
+
+  var repoName = remoteRepoLocation.split(':')[1]
+
+  var command = ''
+  if (type == 'host in config') {
+    if (branch == 'all') {
+      command = 'cd ' + localRepoDir + '\ngit clone ' + host + ':' + repoName + '\n'
+    } else {
+      command = 'cd ' + localRepoDir + '\ngit clone -b ' + branch + ' --single-branch ' + host + ':' + repoName + '\n'
+    }
+    childProcess.execSync(command)
+  } else if (type == 'remote location') {
+    if (branch == 'all') {
+      command = 'cd ' + localRepoDir + '\ngit clone ' + remoteRepoLocation + '\n'
+    } else {
+      command = 'cd ' + localRepoDir + '\ngit clone -b ' + branch + ' --single-branch ' + remoteRepoLocation + '\n'
+    }
+    console.log(command)
+    childProcess.execSync(command)
+  }
+  
+  addRemote(localRepoDir + '/' + repoName, host, repoName)
+}
+
+exports.cloneRepoWithSpecificBranch = function(remoteRepoLocation, localRepoDir, host, keyName, branch) {
+  cloneRepoWithSpecificBranch(remoteRepoLocation, localRepoDir, host, keyName, branch, 'host in config')
 }
 
 function replaceKey(adminRepoDir, keyName) {
@@ -221,46 +264,12 @@ function replaceKey(adminRepoDir, keyName) {
   childProcess.execSync(command)
 }
 
-function addEntryToConfig(remoteAdminRepoServer, keyName, host) {
-  var command = 'touch ' + SSHConfig
-  childProcess.execSync(command)
-
-  if (getServerAddrFromConfig(host) == undefined) {
-    var user = remoteAdminRepoServer.split('@')[0]
-    var hostName = remoteAdminRepoServer.split('@')[1]
-    var data = 'Host ' + host + '\nHostName ' + hostName + '\nUser ' + user + '\nIdentityFile ' 
-                + SSHKeysDir + keyName + '.pub\nIdentitiesOnly yes\n'
-    fs.appendFileSync(SSHConfig, data)
-  }
-}
-
-function cloneRepo(remoteRepoLocation, localRepoDir, host, keyName, type) {
-  mkdirp.sync(localRepoDir)
-
-  addEntryToConfig(remoteRepoLocation.split(':')[0], keyName, host)
-
-  var repoName = remoteRepoLocation.split(':')[1]
-  if (type == 'host in config') {
-    var command = 'cd ' + localRepoDir + '\ngit clone ' + host + ':' + repoName + '\n'
-    childProcess.execSync(command)
-  } else if (type == 'remote location') {
-    var command = 'cd ' + localRepoDir + '\ngit clone ' + remoteRepoLocation + '\n'
-    childProcess.execSync(command)
-  }
-  
-  addRemote(localRepoDir + '/' + repoName, host, repoName)
-}
-
-exports.cloneRepo = function(remoteRepoLocation, localRepoDir, host, keyName) {
-  cloneRepo(remoteRepoLocation, localRepoDir, host, keyName, 'host in config')
-}
-
 exports.setUpAdminRepoLocally = function(remoteAdminRepoServer, localAdminRepoDir, keyName, host) {
   var localAdminRepoPath = localAdminRepoDir + '/' + adminRepo
   var remoteAdminRepoPath = remoteAdminRepoServer + ':' + adminRepo
 
   if (!fs.existsSync(localAdminRepoPath)) {
-    cloneRepo(remoteAdminRepoPath, localAdminRepoDir, host, keyName, 'remote location')
+    cloneRepoWithSpecificBranch(remoteAdminRepoPath, localAdminRepoDir, host, keyName, 'all', 'remote location')
     replaceKey(localAdminRepoDir, keyName)
   }
 }
@@ -362,13 +371,14 @@ exports.checkAndAddKnownHostKey = function(serverAddrWithoutUserAccount, knownHo
   }
 }
 
-function removeStarInBranchName(branches) {
+function trimAndremoveStarInBranchName(branches) {
   for (var i in branches) {
     if (branches[i].indexOf('*') != -1) {
-      branches[i] = branches[i].replace('* ', '')
-      return branches
+      branches[i] = branches[i].replace('*', '')
     }
+    branches[i] = branches[i].trim()
   }
+  return branches
 }
 
 exports.getAllBranches = function(repoPath) {
@@ -377,32 +387,43 @@ exports.getAllBranches = function(repoPath) {
 
   var branchArray = branches.toString().split('\n')
   branchArray = branchArray.slice(0, branchArray.length - 1)
-  branchArray = removeStarInBranchName(branchArray)
+  branchArray = trimAndremoveStarInBranchName(branchArray)
 
   return branchArray
 }
 
-exports.getCurrentBranch = function(repoPath) {
-  try {
-    var command = 'cd ' + repoPath + '\ngit rev-parse --abbrev-ref HEAD\n'
-    var currentBranch = childProcess.execSync(command)
-    currentBranch = currentBranch.toString().split('\n')
-    return _.first(currentBranch)
-  } catch(err) {
-    return undefined
-  }
-}
-
-exports.createBranch = function(repoPath, branchName) {
+exports.createBranch = function(repoPath, branchName, callback) {
   try {
     var command = 'cd ' + repoPath + '\ngit branch ' + branchName + '\n'
-    var currentBranch = childProcess.execSync(command)
-    return null
+    childProcess.execSync(command)
+    callback(null)
   } catch(err) {
-    return err.stdout.toString()
+    callback(err)
   }
 }
 
-exports.mergeBranch = function(repoPath, branchName) {
+exports.changeBranch = function(repoPath, branchName, callback) {
+  try {
+    var command = 'cd ' + repoPath + '\ngit checkout ' +  branchName + '\n'
+    childProcess.execSync(command)
+    callback(null)
+  } catch (err) {
+    callback(err.stdout.toString())
+  }
+}
 
+exports.mergeBranch = function(repoPath, branchName, callback) {
+  try {
+    var command = 'cd ' + repoPath + '\ngit merge ' + branchName + '\n'
+    var result = childProcess.execSync(command)
+    callback(null, result.toString())
+  } catch(err) {
+    callback(err.stdout.toString(), null)
+  }
+}
+
+exports.getCurrentBranch = function(repoPath) {
+  var command = 'cd ' + repoPath + '\ngit branch\n'
+  var result = childProcess.execSync(command)
+  return result
 }

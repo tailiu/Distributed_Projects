@@ -23,14 +23,6 @@ function renderPosts() {
         }
     }
 }
-function renderTagfield() {
-    var tags = ''
-    tags += '<a href="http://localhost:3000/homepage/all?username=' + username + '&&groupName=' + groupName + '\">All</a><br>'
-    tags += '<a href="http://localhost:3000/homepage/life?username=' + username + '&&groupName=' + groupName + '\">life</a><br>'
-    tags += '<a href="http://localhost:3000/homepage/study?username=' + username + '&&groupName=' + groupName + '\">study</a><br>'
-    tags += '<a href="http://localhost:3000/homepage/work?username=' + username + '&&groupName=' + groupName + '\">work</a>'
-    document.getElementById("nav").innerHTML = tags
-}
 function renderComments(post) {
     var comments = post.comments;
     if (comments.length == 0) {
@@ -197,6 +189,16 @@ function createViewSuccessfully() {
 
 
 
+function renderTagfield() {
+    var arguments = 'username=' + username + '&&groupName=' + groupName + '&&view=' + view + '&&hashedPublicKey=' + hashedPublicKey
+    var tags = ''
+
+    tags += '<a href="http://localhost:3000/renderPostsByTag?type=' + 'all&&'+ arguments + '\">All</a><br>'
+    tags += '<a href="http://localhost:3000/renderPostsByTag?type=' + 'life&&'+ arguments + '\">Life</a><br>'
+    tags += '<a href="http://localhost:3000/renderPostsByTag?type=' + 'study&&'+ arguments + '\">Study</a><br>'
+    tags += '<a href="http://localhost:3000/renderPostsByTag?type=' + 'work&&'+ arguments + '\">Work</a>'
+    document.getElementById("nav").innerHTML = tags
+}
 
 function renderViewsManagement() {
     var viewManagement = ''
@@ -208,14 +210,47 @@ function renderViewsManagement() {
     document.getElementById("nav").innerHTML = viewManagement
 }
 
-$(document).on('click', '#views', function() {
-    var getViewsForm = "<h3>Views</h3><br>"
-    getViewsForm += "<form action='http://localhost:3000/getViews' method='post'>"
-    getViewsForm += "<input type='hidden' name='username' value=" + username + ">"
-    getViewsForm += "<input type='hidden' name='groupName' value="+ groupName +">"
-    getViewsForm += "<input type='hidden' name='hashedPublicKey' value=" + hashedPublicKey + ">"
-    getViewsForm += "<input type='submit' name='getView' value='Create'></form>"
-    document.getElementById("mainSection").innerHTML = getViewsForm
+function renderViews(views) {
+    var views_info = ''
+    views_info += '<h3>Change View</h3><br>'
+    views_info += '<p>You are currently in view ' + view + '<p>'
+    views_info += '<p>Please select:</p>'
+    for (var i in views) {
+        if (views[i] == view) {
+            continue
+        }
+        views_info += '<input type="radio" name="chosenView" value=' + views[i] + '>'+ views[i] +'<br>';
+    }
+    return views_info
+}
+
+function showAllViews(views) {
+    var showAllViews = '<form action="http://localhost:3000/changeCurrentView" method="post">'
+    showAllViews += "<input type='hidden' name='groupName' value="+ groupName +">"
+    showAllViews += "<input type='hidden' name='hashedPublicKey' value=" + hashedPublicKey + ">"
+    showAllViews += "<input type='hidden' name='username' value=" + username + ">"
+    showAllViews += "<input type='hidden' name='view' value=" + view + ">"
+    showAllViews += renderViews(views)
+    showAllViews += '<br>'
+    showAllViews += "<input type='submit' name='post' value='Choose' ></form>"
+    document.getElementById("mainSection").innerHTML = showAllViews
+}
+
+function findAndShowAllViews() {
+    var req = {}
+    req.groupName = groupName
+    req.hashedPublicKey = hashedPublicKey
+
+    $.post('http://localhost:3000/findAllViews', req, function(value) {
+        value = removeHTMLTagsFrontAndEnd(value)
+
+        var data = JSON.parse(value)
+        showAllViews(data.views)
+    }, 'html') 
+}
+
+$(document).on('click', '#changeCurrrentView', function() {
+    findAndShowAllViews()
 })
 
 $(document).on('click', '#createBranchView', function() {
@@ -224,10 +259,11 @@ $(document).on('click', '#createBranchView', function() {
     createViewForm += "<input type='hidden' name='username' value=" + username + ">"
     createViewForm += "<input type='hidden' name='groupName' value="+ groupName +">"
     createViewForm += "<input type='hidden' name='hashedPublicKey' value=" + hashedPublicKey + ">"
+    createViewForm += "<input type='hidden' name='currentView' value=" + view + ">"
     createViewForm += "View Name:<br>"
     createViewForm += "<input type='text' name='newView'><br><br>"
     createViewForm += "Rule 1: Filter Keywords:<br>"
-    createViewForm += "<input type='text' name='filterKeyWords'><br>"
+    createViewForm += "<input type='text' name='filterKeyWords'><br><br><br>"
     createViewForm += "<input type='submit' name='createBranchView' value='Create'></form>"
     document.getElementById("mainSection").innerHTML = createViewForm
 })
@@ -238,6 +274,7 @@ $(document).on('click', '#joinGroup', function() {
     JoinGroupForm += "<input type='hidden' name='username' value=" + username + ">"
     JoinGroupForm += "<input type='hidden' name='currentGroupName' value="+ groupName +">"
     JoinGroupForm += "<input type='hidden' name='hashedPublicKey' value=" + hashedPublicKey + ">"
+    JoinGroupForm += "<input type='hidden' name='view' value=" + view + ">"
     JoinGroupForm += "Group name:<br>"
     JoinGroupForm += "<input type='text' name='joinGroupName'><br><br>"
     JoinGroupForm += "<input type='submit' name='join' value='Join'></form></div>"
@@ -250,6 +287,7 @@ function newPost() {
     newPostForm += '<input type="hidden" name="username" value="'+ username +'">'
     newPostForm += '<input type="hidden" name="groupName" value="'+ groupName +'">'
     newPostForm += "<input type='hidden' name='hashedPublicKey' value=" + hashedPublicKey + ">"
+    newPostForm += "<input type='hidden' name='view' value=" + view + ">"
     newPostForm += 'Tags:<br>'
     newPostForm += '<input type="checkbox" name="tag" value="life"> Life <br>'
     newPostForm += '<input type="checkbox" name="tag" value="study"> Study <br>'
@@ -261,6 +299,7 @@ function newPost() {
 
 function renderGroups(groups) {
     var groups_info = ''
+    groups_info += '<h3>Change Group</h3><br>'
     if (groups.length == 0) {
         groups_info += notInAnyGroup()
         return groups_info
@@ -282,9 +321,8 @@ function showAllGroups(groups) {
     changeCurrentGroup += "<input type='hidden' name='currentGroupName' value="+ groupName +">"
     changeCurrentGroup += "<input type='hidden' name='hashedPublicKey' value=" + hashedPublicKey + ">"
     changeCurrentGroup += "<input type='hidden' name='username' value=" + username + ">"
-    changeCurrentGroup += '<div>'
+    changeCurrentGroup += "<input type='hidden' name='view' value=" + view + ">"
     changeCurrentGroup += renderGroups(groups)
-    changeCurrentGroup += '</div>'
     changeCurrentGroup += '<br>'
     changeCurrentGroup += "<input type='submit' name='post' value='Choose' ></form>"
     document.getElementById("mainSection").innerHTML = changeCurrentGroup
@@ -318,6 +356,7 @@ $(document).on('click', '#createOneGroup', function() {
     createGroupForm += "<input type='hidden' name='hashedPublicKey' value=" + hashedPublicKey + ">"
     createGroupForm += "<input type='hidden' name='username' value=" + username + ">"
     createGroupForm += "<input type='hidden' name='currentGroupName' value="+ groupName +">"
+    createGroupForm += "<input type='hidden' name='view' value="+ view +">"
     createGroupForm += "Group name:<br>"
     createGroupForm += "<input type='text' name='groupName'><br><br>"
     createGroupForm += "Server address:<br>"
@@ -360,6 +399,7 @@ function sendRefreshReq() {
     var req = {}
     req.hashedPublicKey = hashedPublicKey
     req.groupName = groupName
+    req.view = view
 
     $.post('http://localhost:3000/refreshPosts', req, function(value) {
         value = removeHTMLTagsFrontAndEnd(value)
@@ -371,6 +411,13 @@ function sendRefreshReq() {
             renderPosts()
         }
     }, 'html') 
+}
+
+function changeViewSuccessfully() {
+    var changeViewSuccessfully = ''
+    changeViewSuccessfully += '<h3>Change View</h3><br>'
+    changeViewSuccessfully += '<p>Change to View: ' + view + '</p>'
+    document.getElementById("mainSection").innerHTML += changeViewSuccessfully
 }
 
 function refresh() {
@@ -421,6 +468,10 @@ function start() {
     if (page == 'homepage/views/createBranchView/createViewSuccessfully') {
         renderViewsManagement()
         createViewSuccessfully()
+    }
+    if (page == 'homepage/views/changeView') {
+        renderViewsManagement()
+        changeViewSuccessfully()
     }
 
 

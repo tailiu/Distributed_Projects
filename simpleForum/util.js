@@ -1,12 +1,20 @@
-var stencil = require('./stencil')
-var fs = require('graceful-fs')
-var crypto = require('crypto')
+const stencil = require('./stencil')
+const fs = require('graceful-fs')
+const crypto = require('crypto')
+const format = require('biguint-format');
+const mkdirp = require('mkdirp')
+const lineByLine = require('n-readlines') 
+const lockfile = require('proper-lockfile') 
+const _ = require('underscore')
 
 const clonedReposDir = 'cloned_repos'
 const downloadedFilesDir = 'downloaded_files'
 const postsMetaFile = 'posts_meta'
 const postsFile = 'posts'
 const masterView = 'master'
+const uploadedFilesDir = 'uploaded_files'
+const branchLocksDir = 'branch_locks'
+const rulesFile = 'rules'
 
 function getClonedReposDir(userID, ok) {
 	return userID + '/' + clonedReposDir
@@ -14,6 +22,41 @@ function getClonedReposDir(userID, ok) {
 
 function getFilePathInRepo(repoPath, relativeFilePathInRepo) {
 	return repoPath + '/' + relativeFilePathInRepo
+}
+
+function getHost(userID, groupName) {
+	return userID + '-' + groupName
+}
+
+function getDownloadedFilePath(userID, fileName) {
+	return userID + '/' + downloadedFilesDir + '/' + fileName
+}
+
+function getUploadedFilesDir(userID) {
+	return userID + '/' + uploadedFilesDir
+}
+
+function getDownloadedPostsFileName(groupName, view) {
+	return groupName + ':' + view + ':' + postsFile
+}
+
+function getClonedRepoPath(groupName, userID) {
+	var clonedRepoDir = getClonedReposDir(userID)
+	return clonedRepoDir + '/' + groupName
+}
+
+function createTmpFile(fileDir, content, callback) {
+	crypto.randomBytes(32, function(err, buf) {
+		var fileName = buf.toString('hex')
+
+		if (!fs.existsSync(fileDir)) {
+			mkdirp.sync(fileDir)
+		} 
+		filePath = fileDir + '/' + fileName
+		fs.writeFile(filePath, content, function(err) {
+			callback(filePath)
+		})
+	})
 }
 
 function getJSONFileContentLocally(filePath, callback) {
@@ -29,17 +72,28 @@ function getJSONFileContentLocally(filePath, callback) {
 	})
 }
 
-function getDownloadedFilePath(userID, fileName) {
-	return userID + '/' + downloadedFilesDir + '/' + fileName
+function lock(filePath, callback) {
+	var backoffTime = _.random(0, 5000)
+
+	lockfile.lock(filePath, function(err, release) {
+		if (err) {
+			setTimeout(function(){
+	    		lock(filePath, callback)
+	    	}, backoffTime)
+		} else {
+			callback(release)
+		}
+	})
 }
 
-function getDownloadedPostsFileName(groupName, view) {
-	return groupName + ':' + view + ':' + postsFile
+function getFileNameFromFilePath(path) {
+	var parts = path.split('/')
+	var fileName = parts[parts.length - 1]
+	return fileName
 }
 
-function getClonedRepoPath(groupName, userID) {
-	var clonedRepoDir = getClonedReposDir(userID)
-	return clonedRepoDir + '/' + groupName
+function getFileDirFromFilePath(path, fileName) {
+	return path.replace(fileName, '')
 }
 
 
@@ -47,12 +101,25 @@ exports.masterView = masterView
 
 exports.postsMetaFile = postsMetaFile
 
+exports.getRulesFilePath = function(userID, groupName) {
+	var clonedRepoPath = getClonedRepoPath(groupName, userID)
+	return clonedRepoPath + '/' + rulesFile
+}
+
+exports.getHost = function(userID, groupName) {
+	return getHost(userID, groupName)
+}
+
 exports.getClonedReposDir = function(userID) {
 	return getClonedReposDir(userID)
 }
 
 exports.getFilePathInRepo = function(repoPath, relativeFilePathInRepo) {
 	return getFilePathInRepo(repoPath, relativeFilePathInRepo)
+}
+
+exports.getBranchLockFilePath = function(userID, groupName) {
+	return userID + '/' + branchLocksDir + '/' + groupName
 }
 
 exports.getClonedRepoPath = function(groupName, userID) {
@@ -85,4 +152,76 @@ exports.downloadPosts = function(groupName, userID, view, callback) {
 			})
 		})
 	})
+}
+
+exports.keepNewCommitAndRemoveOldOne = function(filePath, callback) {
+	var liner = new lineByLine(filePath)
+
+	var line
+	var content = ''
+	var find = false
+
+	while (line = liner.next()) {
+		var str = line.toString('ascii')
+		str = str.trim()
+		if (str.indexOf('<<<<<<< HEAD') != -1 ) {
+			find = true
+			continue
+		} else if (str.indexOf('=======') != -1 ) {
+			find = false
+			continue
+		} else if (str.indexOf('>>>>>>>') != -1 ) {
+			break 
+		}
+		if (!find) {
+			content += str + '\n'
+		}
+	}
+
+	fs.writeFile(filePath, content, function(err) {
+		callback()
+	})
+}
+
+exports.createOrUpdatePosts = function(groupName, userID, content, option, view, callback) {
+	var fileDir = getUploadedFilesDir(userID)
+	var host = getHost(userID, groupName)
+	var repoPath = getClonedRepoPath(groupName, userID)
+
+	createTmpFile(fileDir, JSON.stringify(content), function(filePath) {
+		stencil.createFileInTorrent(filePath, function(filemeta) {
+			var postsMetaFilePath = getFilePathInRepo(repoPath, postsMetaFile)
+			stencil.createOrUpdateFileInRepo(postsMetaFilePath, JSON.stringify(filemeta), option, host, view, function(err) {
+				callback(err)
+			})
+		})
+	})
+}
+
+exports.lock = function(filePath, callback) {
+	lock(filePath, callback)
+}
+
+exports.createJSONFileLocally = function(filePath, content, callback) {
+	var fileName = getFileNameFromFilePath(filePath)
+	var fileDir = getFileDirFromFilePath(filePath, fileName)
+
+	mkdirp.sync(fileDir)
+
+	fs.writeFile(filePath, JSON.stringify(content), function(err){
+		callback()
+	})
+}
+
+exports.filterPosts = function(posts, filterKeyWords) {
+	var removeValFromIndex = []
+	for (var i in posts) {
+		if (posts[i].title.indexOf(filterKeyWords) != -1 || posts[i].pContent.indexOf(filterKeyWords) != -1) {
+			removeValFromIndex.push(i)
+		}
+	}
+	for (var i = removeValFromIndex.length - 1; i >= 0; i--) {
+		posts.splice(removeValFromIndex[i], 1)
+	}
+	return posts
 }
