@@ -21,13 +21,13 @@ function Server (torrent, opts) {
   var _close = server.close
   server.close = function (cb) {
     closed = true
-    torrent = null
     server.removeListener('connection', onConnection)
     server.removeListener('request', onRequest)
     while (pendingReady.length) {
       var onReady = pendingReady.pop()
       torrent.removeListener('ready', onReady)
     }
+    torrent = null
     _close.call(server, cb)
   }
 
@@ -37,6 +37,7 @@ function Server (torrent, opts) {
     })
 
     // Only call `server.close` if user has not called it already
+    if (!cb) cb = function () {}
     if (closed) process.nextTick(cb)
     else server.close(cb)
   }
@@ -111,11 +112,15 @@ function Server (torrent, opts) {
         'DLNA.ORG_OP=01;DLNA.ORG_CI=0;DLNA.ORG_FLAGS=01700000000000000000000000000000'
       )
 
-      var range
-      if (req.headers.range) {
+      // `rangeParser` returns an array of ranges, or an error code (number) if
+      // there was an error parsing the range.
+      var range = rangeParser(file.length, req.headers.range || '')
+
+      if (Array.isArray(range)) {
+        // no support for multi-range request, just use the first range
+        range = range[0]
+
         res.statusCode = 206
-        // no support for multi-range reqs
-        range = rangeParser(file.length, req.headers.range)[0]
         debug('range %s', JSON.stringify(range))
         res.setHeader(
           'Content-Range',
@@ -123,6 +128,7 @@ function Server (torrent, opts) {
         )
         res.setHeader('Content-Length', range.end - range.start + 1)
       } else {
+        range = null
         res.setHeader('Content-Length', file.length)
       }
 

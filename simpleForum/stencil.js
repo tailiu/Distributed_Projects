@@ -61,7 +61,7 @@ exports.syncLocalAndRemoteBranches = function(repoPath, host, branch, callback) 
     var result = childProcess.execSync(command)
     callback(null, result.toString())
   } catch (err) {
-    callback(err.stdout.toString(), null)
+    callback(handleErr(err), null)
   }
 }
 
@@ -102,7 +102,7 @@ function pushToGitRepo(fileDir, fileName, comment, host, branch, callback) {
     childProcess.execSync(command)
     callback(null)
   } catch (err) {
-    callback(err)
+    callback(handleErr(err))
   } 
 }
 
@@ -136,22 +136,18 @@ exports.createFileInTorrent = function(filePath, callback) {
   
 }
 
-exports.getFileFromTorrent = function (torrentSeeds, downloadedFilePath, callback) {
-  var fileName = getFileNameFromFilePath(downloadedFilePath)
-  var fileDir = getFileDirFromFilePath(downloadedFilePath, fileName)
-
-  mkdirp.sync(fileDir)
-
+function downloadFile(torrentSeeds, downloadedFilePath, callback) {
   var ws = fs.createWriteStream(downloadedFilePath)
-  var torrent = new WebTorrent({ dht: false, tracker: false })
-  var tor = torrent.add(torrentSeeds[0].infoHash)
+  var client = new WebTorrent({ dht: false, tracker: false })
+  var torrent = client.add(torrentSeeds[0].infoHash)
   var rs
 
-  tor.addPeer(torrentSeeds[0].ipAddr + ':' + torrentSeeds[0].torrentPort)
-  torrent.on('torrent', function (value) {
+  torrent.addPeer(torrentSeeds[0].ipAddr + ':' + torrentSeeds[0].torrentPort)
+
+  client.on('torrent', function (value) {
     rs = value.files[0].createReadStream()
     rs.pipe(ws)
-    tor.on('done', function () {
+    torrent.on('done', function () {
       rs.on('end', function () {
         callback()
       })
@@ -159,6 +155,43 @@ exports.getFileFromTorrent = function (torrentSeeds, downloadedFilePath, callbac
   })
 }
 
+exports.getFileFromTorrent = function(torrentSeeds, downloadedFilePath, callback) {
+  var fileName = getFileNameFromFilePath(downloadedFilePath)
+  var fileDir = getFileDirFromFilePath(downloadedFilePath, fileName)
+
+  mkdirp.sync(fileDir)
+
+  fs.exists(downloadedFilePath, function(exists) {
+    if (!exists) {
+      fs.writeFile(downloadedFilePath, '[]', function(err) {
+        downloadFile(torrentSeeds, downloadedFilePath, callback)
+      })
+    } else {
+      downloadFile(torrentSeeds, downloadedFilePath, callback)
+    }
+  })
+  
+}
+
+function handleErr(err) {
+  if (err.stderr == undefined && err.stdout == undefined) {
+    return 'both undefined:' + err.toString()
+
+  }
+  else if (err.stderr == undefined) {
+    return err.stdout.toString()
+
+  } else if (err.stdout == undefined) {
+    return err.stderr.toString()
+
+  } else if (err.stderr.toString() === '') {
+    return err.stdout.toString()
+
+  } else {
+    return err.stderr.toString()
+
+  }
+}
 
 function getAdminRepoPath(adminRepoDir) {
   return adminRepoDir + '/' + adminRepo
@@ -371,25 +404,25 @@ exports.checkAndAddKnownHostKey = function(serverAddrWithoutUserAccount, knownHo
   }
 }
 
-function trimAndremoveStarInBranchName(branches) {
-  for (var i in branches) {
-    if (branches[i].indexOf('*') != -1) {
-      branches[i] = branches[i].replace('*', '')
+function getRemoteOriginBranches(arr1) {
+  var branchArr = []
+  for (var i in arr1) {
+    var arr2 = arr1[i].split('/')
+    if (arr2.length < 3) {
+      continue
     }
-    branches[i] = branches[i].trim()
+    if (arr2[0].trim() == 'remotes' && arr2[1].trim() == 'origin' && arr2[2].trim().indexOf('->') == -1) {
+      branchArr.push(arr2[2])
+    }
   }
-  return branches
+  return branchArr
 }
 
-exports.getAllBranches = function(repoPath) {
-  var command = 'cd ' + repoPath + '\ngit branch\n'
-  var branches = childProcess.execSync(command)
+exports.getAllRemoteBranches = function(repoPath) {
+  var command = 'cd ' + repoPath + '\ngit fetch --all\ngit branch -a\n'
+  var result = childProcess.execSync(command)
 
-  var branchArray = branches.toString().split('\n')
-  branchArray = branchArray.slice(0, branchArray.length - 1)
-  branchArray = trimAndremoveStarInBranchName(branchArray)
-
-  return branchArray
+  return getRemoteOriginBranches(result.toString().split('\n'))
 }
 
 exports.createBranch = function(repoPath, branchName, callback) {
@@ -398,7 +431,7 @@ exports.createBranch = function(repoPath, branchName, callback) {
     childProcess.execSync(command)
     callback(null)
   } catch(err) {
-    callback(err)
+    callback(handleErr(err))
   }
 }
 
@@ -408,7 +441,7 @@ exports.changeBranch = function(repoPath, branchName, callback) {
     childProcess.execSync(command)
     callback(null)
   } catch (err) {
-    callback(err.stdout.toString())
+    callback(handleErr(err))
   }
 }
 
@@ -418,7 +451,7 @@ exports.mergeBranch = function(repoPath, branchName, callback) {
     var result = childProcess.execSync(command)
     callback(null, result.toString())
   } catch(err) {
-    callback(err.stdout.toString(), null)
+    callback(handleErr(err), null)
   }
 }
 
@@ -426,4 +459,16 @@ exports.getCurrentBranch = function(repoPath) {
   var command = 'cd ' + repoPath + '\ngit branch\n'
   var result = childProcess.execSync(command)
   return result
+}
+
+exports.checkoutToBranchFirstTime = function(repoPath, remote, localBranch, remoteBranch, callback) {
+  try {
+    var command = 'cd ' + repoPath + '\n'
+    command += 'git fetch --all\n'
+    command += 'git checkout -b ' + localBranch + ' --track ' + remote + '/' + remoteBranch + '\n'
+    childProcess.execSync(command)
+    callback(null)
+  } catch (err) {
+    callback(handleErr(err))
+  }
 }

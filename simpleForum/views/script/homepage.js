@@ -157,7 +157,7 @@ $(document).on('click', '.section', function() {
     var index = parseInt($(this).text().split(":")[0], 10)
     index--
     var post = posts[index]
-    var commentForm = "<div class='commentPostSection'><h3>" + post.name + "</h3><p>" + post.content + "</p>" + "</div> <br>";
+    var commentForm = "<div class='commentPostSection'><h3>" + post.title + "</h3><p>" + post.pContent + "</p>" + "</div> <br>";
     commentForm += renderComments(post) + "<br>";
     commentForm += "<form action='http://localhost:3000/homepage/newComment' method='post' id='nComment'>"
     commentForm += "<input type='hidden' name='username' value=" + username + ">"
@@ -213,6 +213,10 @@ function renderViewsManagement() {
 function renderViews(views) {
     var views_info = ''
     views_info += '<h3>Change View</h3><br>'
+    if (views.length == 1) {
+        views_info += 'There is only one view ' + views[0] + '. You cannot change to other views'
+        return views_info
+    }
     views_info += '<p>You are currently in view ' + view + '<p>'
     views_info += '<p>Please select:</p>'
     for (var i in views) {
@@ -221,6 +225,8 @@ function renderViews(views) {
         }
         views_info += '<input type="radio" name="chosenView" value=' + views[i] + '>'+ views[i] +'<br>';
     }
+    views_info += '<br>'
+    views_info += "<input type='submit' name='post' value='Choose'>"
     return views_info
 }
 
@@ -231,8 +237,7 @@ function showAllViews(views) {
     showAllViews += "<input type='hidden' name='username' value=" + username + ">"
     showAllViews += "<input type='hidden' name='view' value=" + view + ">"
     showAllViews += renderViews(views)
-    showAllViews += '<br>'
-    showAllViews += "<input type='submit' name='post' value='Choose' ></form>"
+    showAllViews += '</form>'
     document.getElementById("mainSection").innerHTML = showAllViews
 }
 

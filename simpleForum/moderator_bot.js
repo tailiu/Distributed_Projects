@@ -50,7 +50,8 @@ function lockAndMergeFile() {
 		stencil.changeBranch(repoPath, view, function(err) {
 			if (err == null) {
 				stencil.mergeBranch(repoPath, masterView, function(err, result) {
-					//If master branch has new commits
+					//If master branch has new commits, these commits cause unmerged errors.
+					//So far, all the errors have happened in the posts meta file
 					if (err != null) {
 						//Download the lastest posts from master branch
 						util.lock(masterViewPostsFilePath, function(releaseMasterViewPostsLock) {
@@ -65,7 +66,10 @@ function lockAndMergeFile() {
 								})
 							})
 						})
-					} else {
+					}
+					//Master branch might also have some commits, but these commits do not cause errors.
+					//For example, add member to the member list. Merge can be made by the 'recursive' strategy automatically
+					else {
 						releaseBranchLock()
 					}
 				})

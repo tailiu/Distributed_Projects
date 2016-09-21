@@ -15,6 +15,7 @@ var _ = require('underscore')
 var request = require('request')
 var cluster = require('cluster')
 var util = require('./util')
+var WebTorrent = require('webtorrent')
 
 var REORDER = 0
 var ORDER = 1
@@ -27,7 +28,7 @@ const memListFile = 'member_list'
 const uploadedFilesDir = 'uploaded_files'
 const defaultSSHKeysDir = '/home/'+ findCurrentAccount() + '/.ssh'
 const knownHostsPath = '/home/' + findCurrentAccount() + '/.ssh/known_hosts'
-const numResponseBots = 2
+const numResponseBots = 1
 const largestPortNum = 65536
 
 const localDHTNodeAddr = 'localhost'
@@ -390,7 +391,7 @@ function appendToMemList(groupName, userID, newMem, view, callback) {
 }
 
 function addMember(groupName, newMem, SSHPublicKey, newMemHashedPublicKey, moderatorID, callback) {
-	//appendToMemList(groupName, moderatorID, newMem, masterView, function() {
+	appendToMemList(groupName, moderatorID, newMem, masterView, function() {
 		var repoPath = util.getClonedRepoPath(groupName, moderatorID)
 		var serverAddr = stencil.getServerAddr(repoPath)
 		var adminRepoDir = getAdminReposDir(moderatorID, serverAddr)
@@ -402,7 +403,7 @@ function addMember(groupName, newMem, SSHPublicKey, newMemHashedPublicKey, moder
 		var knownHostKey = stencil.getKnownHostKey(serverAddrWithoutUserAccount)
 
 		callback(serverAddr, knownHostKey)
-	//})
+	})
 }
 
 function processReq(username, hashedPublicKey, SSHPublicKey, groupName, moderatorID, callback) {
@@ -647,16 +648,20 @@ function checkBotExists(message) {
 }
 
 function messageHandlerInMaster(message) {
-	// var find = checkBotExists(message)
+	//Make sure that there is only one moderator bot or one sync bot for each view of the group
+	//var find = checkBotExists(message)
 
-	// if (!find) {
-		if (message.type == 'createModeratorBot') {
-			startModeratorBot(message)
-		} else if (message.type == 'createSyncBot') {
-			startSyncBot(message)
-		} else {
-			console.log(message)
-		}
+	//console.log(find + 'create bot:' + JSON.stringify(message))
+	//if (!find) {
+	if (message == undefined || message == null) {
+		console.log('Meaningless message: ' + message)
+	} else if (message.type == 'createModeratorBot') {
+		startModeratorBot(message)
+	} else if (message.type == 'createSyncBot') {
+		startSyncBot(message)
+	} else {
+		console.log(message)
+	}
 	//}
 }
 
@@ -713,12 +718,13 @@ function createBranchView(userID, groupName, view, filterKeyWords, callback) {
 		if (err != null) {
 			callback(err)
 		} else {
-			util.lock(masterViewPostsFilePath, function(releaseMasterViewPostsLock) {
-				util.getJSONFileContentLocally(masterViewPostsFilePath, function(masterViewPosts) {
-					releaseMasterViewPostsLock()
-					var filteredPosts = util.filterPosts(masterViewPosts, filterKeyWords)
+			util.lock(branchLockFilePath, function(releaseBranchLock) {
+				util.lock(masterViewPostsFilePath, function(releaseMasterViewPostsLock) {
 
-					util.lock(branchLockFilePath, function(releaseBranchLock) {
+					util.getJSONFileContentLocally(masterViewPostsFilePath, function(masterViewPosts) {
+						releaseMasterViewPostsLock()
+						var filteredPosts = util.filterPosts(masterViewPosts, filterKeyWords)
+					
 						stencil.changeBranch(repoPath, view, function(err) {
 							util.createOrUpdatePosts(groupName, userID, filteredPosts, 'update', view, function(err) {
 								var filter = {}
@@ -771,7 +777,7 @@ function createBotReq(userID, groupName, view, filterKeyWords, type, callback) {
 
 function getAllViews(groupName, userID) {
 	var repoPath = util.getClonedRepoPath(groupName, userID)
-	return stencil.getAllBranches(repoPath)
+	return stencil.getAllRemoteBranches(repoPath)
 }
 
 function addNewPost(newOne, postsFilePath, groupName, userID, view, callback) {
@@ -804,14 +810,16 @@ function addNewPost(newOne, postsFilePath, groupName, userID, view, callback) {
 }
 
 function newPost(title, groupName, hashedPublicKey, tag, postContent, view, callback) {
-	var postsFileName = util.getDownloadedPostsFileName(groupName, masterView)
-	var postsFilePath = util.getDownloadedFilePath(hashedPublicKey, postsFileName)
+	var masterViewPostsFileName = util.getDownloadedPostsFileName(groupName, masterView)
+	var masterViewPostsFilePath = util.getDownloadedFilePath(hashedPublicKey, masterViewPostsFileName)
+	var viewPostsFileName = util.getDownloadedPostsFileName(groupName, view)
+	var viewPostsFilePath = util.getDownloadedFilePath(hashedPublicKey, viewPostsFileName)
 	var repoPath = util.getClonedRepoPath(groupName, hashedPublicKey)
 	var branchLockFilePath = util.getBranchLockFilePath(hashedPublicKey, groupName)
 	var rulesFilePath = util.getRulesFilePath(hashedPublicKey, groupName)
 
-	util.lock(postsFilePath, function(releaseFileLock) {
-		util.lock(branchLockFilePath, function(releaseBranchLock){
+	util.lock(masterViewPostsFilePath, function(releaseMasterFileLock) {
+		util.lock(branchLockFilePath, function(releaseBranchLock) {
 
 			stencil.changeBranch(repoPath, masterView, function(err) {
 				var newOne = {}
@@ -822,16 +830,23 @@ function newPost(title, groupName, hashedPublicKey, tag, postContent, view, call
 				newOne.comments = []
 				newOne.tag = tag
 
-		    	addNewPost(newOne, postsFilePath, groupName, hashedPublicKey, masterView, function(masterViewPosts){
-		    		releaseFileLock()
+		    	addNewPost(newOne, masterViewPostsFilePath, groupName, hashedPublicKey, masterView, function(masterViewPosts){
+		    		releaseMasterFileLock()
 
 		    		if (view != masterView) {
 		    			stencil.changeBranch(repoPath, view, function(err) {
 			    			util.getJSONFileContentLocally(rulesFilePath, function(rules) {
-			    				releaseBranchLock()
+			    				var filteredPosts = util.filterPosts(masterViewPosts, rules.filterKeyWords)
 
-				    			var filteredPosts = util.filterPosts(masterViewPosts, rules.filterKeyWords)
-				    			callback(filteredPosts)
+			    				util.lock(viewPostsFilePath, function(releaseViewFileLock){	
+					    			util.createJSONFileLocally(viewPostsFilePath, filteredPosts, function() {
+
+					    				releaseViewFileLock()
+					    				releaseBranchLock()
+					    				callback(filteredPosts)
+					    			})
+			    				})
+				    			
 			    			})
 			    			
 			    		})
@@ -846,28 +861,40 @@ function newPost(title, groupName, hashedPublicKey, tag, postContent, view, call
 	})
 }
 
-//Show all the posts
-app.get('/renderPostsByTag', function(req, res) {
-	var username = req.query.username
-	var groupName = req.query.groupName
-	var hashedPublicKey = req.query.hashedPublicKey
-	var view = req.query.view
-	var type = req.query.type
+function changeCurrentView(userID, groupName, chosenView, callback) {
+	var repoPath = util.getClonedRepoPath(groupName, userID)
+	var host = util.getHost(userID, groupName)
+	var branchLockFilePath = util.getBranchLockFilePath(userID, groupName)
 
-	var data = {}
-	data.groupName = groupName
-	data.username = username
-	data.hashedPublicKey = hashedPublicKey
-	data.view = view
+	util.lock(branchLockFilePath, function(releaseBranchLock) {
+		stencil.changeBranch(repoPath, chosenView, function(err) {
+			if (err == null) {
+				releaseBranchLock()
+				callback()
+			} else if (err.indexOf('did not match any file(s) known to git') != -1) {
+				stencil.checkoutToBranchFirstTime(repoPath, host, chosenView, chosenView, function(err) {
 
-	getPosts(groupName, hashedPublicKey, view, function(posts) {
-		if (type == 'all') {
-			data.posts = posts
-		}
-		sendPages(res, data, 'homepage/posts')
+					// var postsFileName = util.getDownloadedPostsFileName(groupName, chosenView)
+					// var postsFilePath = util.getDownloadedFilePath(userID, postsFileName)
+					// util.createJSONFileLocally(postsFilePath, [], function() {
+						util.downloadPosts(groupName, userID, chosenView, function() {
+							
+							createBotReq(userID, groupName, chosenView, undefined, 'sync', function(err) {
+								releaseBranchLock()
+								callback()
+							})
+						})
+					//})
+				
+				})
+			} else {
+				releaseBranchLock()
+				callback()
+			}
+		})
 	})
-})
 
+}
 
 if (cluster.isMaster) {
 	for (var i = 0; i < numResponseBots; i++) {
@@ -902,10 +929,10 @@ if (cluster.isMaster) {
 		data.hashedPublicKey = hashedPublicKey
 		data.view = chosenView
 
-		//createBotReq(hashedPublicKey, groupName, chosenView, undefined, 'sync', function(err) {
-
+		changeCurrentView(hashedPublicKey, groupName, chosenView, function() {
 			sendPages(res, data, 'homepage/views/changeView')
-		//})
+		})
+
 	})
 
 	app.post('/findAllViews', function(req, res) {
@@ -1103,4 +1130,27 @@ if (cluster.isMaster) {
 			sendPages(res, data, 'homepage/group/changeCurrentGroup/ChangeGroupSuccessfully')
 		}
 	})
+
+	//Show all the posts
+	app.get('/renderPostsByTag', function(req, res) {
+		var username = req.query.username
+		var groupName = req.query.groupName
+		var hashedPublicKey = req.query.hashedPublicKey
+		var view = req.query.view
+		var type = req.query.type
+
+		var data = {}
+		data.groupName = groupName
+		data.username = username
+		data.hashedPublicKey = hashedPublicKey
+		data.view = view
+
+		getPosts(groupName, hashedPublicKey, view, function(posts) {
+			if (type == 'all') {
+				data.posts = posts
+			}
+			sendPages(res, data, 'homepage/posts')
+		})
+	})
+
 }
