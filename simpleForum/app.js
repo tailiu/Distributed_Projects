@@ -16,6 +16,7 @@ var request = require('request')
 var cluster = require('cluster')
 var util = require('./util')
 var WebTorrent = require('webtorrent')
+var lockfile = require('proper-lockfile') 
 
 var REORDER = 0
 var ORDER = 1
@@ -28,7 +29,7 @@ const memListFile = 'member_list'
 const uploadedFilesDir = 'uploaded_files'
 const defaultSSHKeysDir = '/home/'+ findCurrentAccount() + '/.ssh'
 const knownHostsPath = '/home/' + findCurrentAccount() + '/.ssh/known_hosts'
-const numResponseBots = 1
+const numResponseBots = 3
 const largestPortNum = 65536
 
 const localDHTNodeAddr = 'localhost'
@@ -575,8 +576,10 @@ function getPosts(groupName, userID, view, callback) {
 	var postsFilePath = util.getDownloadedFilePath(userID, postsFileName)
 	var repoPath = util.getClonedRepoPath(groupName, userID)
 
+	console.log('Get posts, ' + process.pid + ' tries to lock ' + postsFilePath)
 	util.lock(postsFilePath, function (release) {
 		util.getJSONFileContentLocally(postsFilePath, function(posts) {
+			console.log('After getting posts, ' + process.pid + ' unlocks ' + postsFilePath)
 			release()
 			callback(posts)
 		})
@@ -714,14 +717,19 @@ function createBranchView(userID, groupName, view, filterKeyWords, callback) {
 	var rulesFilePath = util.getRulesFilePath(userID, groupName)
 	var host = util.getHost(userID, groupName)
 
-	stencil.createBranch(repoPath, view, function(err){
-		if (err != null) {
-			callback(err)
-		} else {
-			util.lock(branchLockFilePath, function(releaseBranchLock) {
+	console.log('Create Branch view, ' + process.pid + ' response bot tries to lock branch')
+	util.lock(branchLockFilePath, function(releaseBranchLock) {
+
+		stencil.createBranch(repoPath, view, function(err){
+			if (err != null) {
+				releaseBranchLock()
+				callback(err)
+			} else {
+				console.log('Create Branch view, ' + process.pid + ' response bot tries to lock ' + masterViewPostsFilePath)
 				util.lock(masterViewPostsFilePath, function(releaseMasterViewPostsLock) {
 
 					util.getJSONFileContentLocally(masterViewPostsFilePath, function(masterViewPosts) {
+						console.log('create branch view, first, ' + process.pid + ' unlock ' + masterViewPostsFilePath)
 						releaseMasterViewPostsLock()
 						var filteredPosts = util.filterPosts(masterViewPosts, filterKeyWords)
 					
@@ -731,6 +739,7 @@ function createBranchView(userID, groupName, view, filterKeyWords, callback) {
 								filter.filterKeyWords = filterKeyWords
 
 								stencil.createOrUpdateFileInRepo(rulesFilePath, JSON.stringify(filter), 'create', host, view, function() {
+									console.log('create branch view, second, ' + process.pid + ' unlock branch')
 									releaseBranchLock()
 
 									util.createJSONFileLocally(viewPostsFilePath, filteredPosts, function(){
@@ -744,8 +753,8 @@ function createBranchView(userID, groupName, view, filterKeyWords, callback) {
 						})
 					})
 				})
-			})
-		}
+			}
+		})
 	})
 
 }
@@ -784,9 +793,9 @@ function addNewPost(newOne, postsFilePath, groupName, userID, view, callback) {
 	var host = util.getHost(userID, groupName)
 	var repoPath = util.getClonedRepoPath(groupName, userID)
 	var postsMetaFilePath = util.getFilePathInRepo(repoPath, util.postsMetaFile)
-
+	console.log('2222222222222222222222222222222222')
 	util.downloadPosts(groupName, userID, view, function(posts) {
-
+		console.log('3333333333333333333333333333333333333')
 		posts.push(newOne)
 
 		util.createOrUpdatePosts(groupName, userID, posts, 'update', view, function(err) {
@@ -818,9 +827,10 @@ function newPost(title, groupName, hashedPublicKey, tag, postContent, view, call
 	var branchLockFilePath = util.getBranchLockFilePath(hashedPublicKey, groupName)
 	var rulesFilePath = util.getRulesFilePath(hashedPublicKey, groupName)
 
-	util.lock(masterViewPostsFilePath, function(releaseMasterFileLock) {
-		util.lock(branchLockFilePath, function(releaseBranchLock) {
-
+	console.log('Post new messages to ' + view + ', ' + process.pid + ' response bot tries to lock ' + branchLockFilePath)
+	util.lock(branchLockFilePath, function(releaseBranchLock) {
+		console.log('Post new messages, ' + process.pid + ' response bot tries to lock ' + masterViewPostsFilePath)
+		util.lock(masterViewPostsFilePath, function(releaseMasterFileLock) {
 			stencil.changeBranch(repoPath, masterView, function(err) {
 				var newOne = {}
 				newOne.creator = hashedPublicKey
@@ -831,16 +841,23 @@ function newPost(title, groupName, hashedPublicKey, tag, postContent, view, call
 				newOne.tag = tag
 
 		    	addNewPost(newOne, masterViewPostsFilePath, groupName, hashedPublicKey, masterView, function(masterViewPosts){
+		    		console.log('Post messages, first, ' + process.pid + ' response bot unlocks ' + masterViewPostsFilePath)
 		    		releaseMasterFileLock()
 
 		    		if (view != masterView) {
 		    			stencil.changeBranch(repoPath, view, function(err) {
+		    				if (err != null) {
+		    					console.log('para:' + repoPath + ":" + view + '.')
+		    					console.log('change branch err ' + err)
+		    				}
+		    				console.log('Current branch ' + stencil.getCurrentBranch(repoPath))
 			    			util.getJSONFileContentLocally(rulesFilePath, function(rules) {
 			    				var filteredPosts = util.filterPosts(masterViewPosts, rules.filterKeyWords)
 
+			    				console.log('Post new messages, ' + process.pid + ' response bot tries to lock ' + viewPostsFilePath)
 			    				util.lock(viewPostsFilePath, function(releaseViewFileLock){	
 					    			util.createJSONFileLocally(viewPostsFilePath, filteredPosts, function() {
-
+					    				console.log('(not master)post new messages, second, ' + process.pid + ' response bot unlocks branch lock and ' + viewPostsFilePath)
 					    				releaseViewFileLock()
 					    				releaseBranchLock()
 					    				callback(filteredPosts)
@@ -851,6 +868,7 @@ function newPost(title, groupName, hashedPublicKey, tag, postContent, view, call
 			    			
 			    		})
 		    		} else {
+		    			console.log('(master)post messages, second, ' + process.pid + ' response bot unlocks branch lock')
 		    			releaseBranchLock()
 		    			callback(masterViewPosts)
 		    		}
@@ -866,28 +884,36 @@ function changeCurrentView(userID, groupName, chosenView, callback) {
 	var host = util.getHost(userID, groupName)
 	var branchLockFilePath = util.getBranchLockFilePath(userID, groupName)
 
+	console.log('change view ' + process.pid + ' response bot locks branch')
 	util.lock(branchLockFilePath, function(releaseBranchLock) {
 		stencil.changeBranch(repoPath, chosenView, function(err) {
 			if (err == null) {
+				console.log('response bot ' + process.pid + 'not change to branch first time, release branch lock')
 				releaseBranchLock()
 				callback()
 			} else if (err.indexOf('did not match any file(s) known to git') != -1) {
 				stencil.checkoutToBranchFirstTime(repoPath, host, chosenView, chosenView, function(err) {
 
+					if (err != null) {
+						console.log('checkout to branch first time err' + err)
+					}
 					// var postsFileName = util.getDownloadedPostsFileName(groupName, chosenView)
 					// var postsFilePath = util.getDownloadedFilePath(userID, postsFileName)
 					// util.createJSONFileLocally(postsFilePath, [], function() {
+						console.log('{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{' + chosenView)
 						util.downloadPosts(groupName, userID, chosenView, function() {
-							
+							console.log('|||||||||||||||||||||||||||||||||||||||||||||||||||')
 							createBotReq(userID, groupName, chosenView, undefined, 'sync', function(err) {
+								console.log('response bot ' + process.pid + 'change to branch first time, release branch lock')
 								releaseBranchLock()
 								callback()
 							})
 						})
 					//})
-				
+
 				})
 			} else {
+				console.log('response bot ' + process.pid + ' not change to branch first time nor change to branch first time, release branch lock')
 				releaseBranchLock()
 				callback()
 			}
@@ -908,6 +934,13 @@ if (cluster.isMaster) {
 
 } else {
 	var httpServer = http.createServer(app)
+
+	process.once('SIGINT', function(){
+		process.exit(1)
+	})
+	process.once('SIGTERM', function(){
+		process.exit(1)
+	})
 
 	stencil.createDHTNode(localDHTNodeAddr, getWorkerLocalDHTPort(process.pid), getWorkerLocalDHTNodeDB(process.pid), function(node) {
 		localDHTNode = node

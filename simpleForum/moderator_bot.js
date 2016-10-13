@@ -45,6 +45,7 @@ function pushToRemoteBranch(posts, callback) {
 }
 
 function lockAndMergeFile() {
+	process.send(process.pid + ' moderator bot, tries to lock branch ' + branchLockFilePath)
 	util.lock(branchLockFilePath, function(releaseBranchLock) {
 
 		stencil.changeBranch(repoPath, view, function(err) {
@@ -54,14 +55,17 @@ function lockAndMergeFile() {
 					//So far, all the errors have happened in the posts meta file
 					if (err != null) {
 						//Download the lastest posts from master branch
+						process.send(process.pid + ' moderator bot, tries to lock ' + masterViewPostsFilePath)
 						util.lock(masterViewPostsFilePath, function(releaseMasterViewPostsLock) {
 							util.getJSONFileContentLocally(masterViewPostsFilePath, function(masterViewPosts) {
+								process.send('finish first' + process.pid + ' moderator bot, unlock ' + masterViewPostsFilePath)
 								releaseMasterViewPostsLock()
 
 								var filteredPosts = util.filterPosts(masterViewPosts, filterKeyWords)
 
 								//Push the filtered results to the remote branch
 								pushToRemoteBranch(filteredPosts, function(){
+									process.send('finish second' + process.pid + ' moderator bot, unlock branch ' + branchLockFilePath)
 									releaseBranchLock()
 								})
 							})
@@ -70,10 +74,12 @@ function lockAndMergeFile() {
 					//Master branch might also have some commits, but these commits do not cause errors.
 					//For example, add member to the member list. Merge can be made by the 'recursive' strategy automatically
 					else {
+						process.send('finish ' + process.pid + ' moderator bot, unlock branch ' + branchLockFilePath)
 						releaseBranchLock()
 					}
 				})
 			} else {
+				process.send('finish ' + process.pid + ' moderator bot, unlock branch ' + branchLockFilePath)
 				releaseBranchLock()
 			}
 		})
@@ -88,4 +94,12 @@ process.on('message', function (msg) {
     if (msg === 'shutdown') {
     	exit(0)
     }
+})
+
+
+process.once('SIGINT', function(){
+	process.exit(1)
+})
+process.once('SIGTERM', function(){
+	process.exit(1)
 })

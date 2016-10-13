@@ -77,10 +77,12 @@ function lock(filePath, callback) {
 
 	lockfile.lock(filePath, function(err, release) {
 		if (err) {
+			console.log(process.pid + ' failed to lock ' + filePath + ' ' + err.toString())
 			setTimeout(function(){
 	    		lock(filePath, callback)
 	    	}, backoffTime)
 		} else {
+			console.log(process.pid + ' locks ' + filePath)
 			callback(release)
 		}
 	})

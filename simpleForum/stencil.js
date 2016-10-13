@@ -141,18 +141,31 @@ function downloadFile(torrentSeeds, downloadedFilePath, callback) {
   var client = new WebTorrent({ dht: false, tracker: false })
   var torrent = client.add(torrentSeeds[0].infoHash)
   var rs
+  var timeout = false
+  var notTimeout = false
 
   torrent.addPeer(torrentSeeds[0].ipAddr + ':' + torrentSeeds[0].torrentPort)
 
-  client.on('torrent', function (value) {
-    rs = value.files[0].createReadStream()
-    rs.pipe(ws)
-    torrent.on('done', function () {
-      rs.on('end', function () {
-        callback()
+  torrent.on('done', function() {
+    if (!timeout) {
+      notTimeout = true
+      torrent.files.forEach(function(file){
+        rs = file.createReadStream()
+        rs.pipe(ws)
+        rs.on('end', function(){
+          callback()
+        })
       })
-    })
+    }
   })
+
+  setTimeout(function(){
+    if (!notTimeout) {
+      timeout = true
+      console.log('timeout')
+      downloadFile(torrentSeeds, downloadedFilePath, callback)
+    }
+  }, 2000)
 }
 
 exports.getFileFromTorrent = function(torrentSeeds, downloadedFilePath, callback) {
@@ -456,7 +469,7 @@ exports.mergeBranch = function(repoPath, branchName, callback) {
 }
 
 exports.getCurrentBranch = function(repoPath) {
-  var command = 'cd ' + repoPath + '\ngit branch\n'
+  var command = 'cd ' + repoPath + '\ngit rev-parse --abbrev-ref HEAD\n'
   var result = childProcess.execSync(command)
   return result
 }

@@ -14,7 +14,7 @@ var postsFilePath = util.getDownloadedFilePath(userID, postsFileName)
 var branchLockFilePath = util.getBranchLockFilePath(userID, groupName)
 
 function lockAndUpdateFile() {
-
+	process.send(process.pid + ' sync bot, tries to lock branch ' + branchLockFilePath)
 	util.lock(branchLockFilePath, function(releaseBranchLock) {
 
 		stencil.changeBranch(repoPath, view, function(err) {
@@ -23,25 +23,33 @@ function lockAndUpdateFile() {
 					if (err == null) {
 						//If new changes are fetched, update the downloaded posts
 						if (result.indexOf('Already up-to-date') == -1) {
+							process.send(process.pid + ' sync bot, tries to lock ' + postsFilePath)
 							util.lock(postsFilePath, function(releasePostFileLock) {
+								process.send(process.pid + ' prior to downloading')
 								util.downloadPosts(groupName, userID, view, function() {
+									process.send(process.pid + ' finish downloading')
+									process.send('finish ' + process.pid + ' sync bot, unlock branch ' + branchLockFilePath)
 									releaseBranchLock()
+									process.send('finish ' + process.pid + ' sync bot, unlock ' + postsFilePath)
 									releasePostFileLock()
 								})
 							})
 						} 
 						else {
+							process.send('finish ' + process.pid + ' sync bot, unlock branch ' + branchLockFilePath)
 							releaseBranchLock()
 						}
 					} 
 					//Git pull host branch might fail because of unmerged files
 					else {
+						process.send('finish ' + process.pid + ' sync bot, unlock branch ' + branchLockFilePath)
 						releaseBranchLock()
 					}
 				})
 			} 
 			//Change branch might fail because of unmerged files
 			else {
+				process.send('finish ' + process.pid + ' sync bot, unlock branch ' + branchLockFilePath)
 				releaseBranchLock()
 			}
 		})
@@ -52,3 +60,11 @@ function lockAndUpdateFile() {
 setInterval(function () {
 	lockAndUpdateFile()
 }, syncCycle)
+
+
+process.once('SIGINT', function(){
+	process.exit(1)
+})
+process.once('SIGTERM', function(){
+	process.exit(1)
+})
