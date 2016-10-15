@@ -20,25 +20,51 @@ var postsMetaFilePath = util.getFilePathInRepo(repoPath, util.postsMetaFile)
 
 
 function pushToRemoteBranch(posts, callback) {
-	util.createOrUpdatePosts(groupName, userID, posts, 'update', view, function(err) {
 
-		util.lock(viewPostsFilePath, function(releaseViewPostsFileLock){
-			
-			if (err == null) {
-				util.createJSONFileLocally(viewPostsFilePath, posts, function(){
-					releaseViewPostsFileLock()
-					callback()
-				})
-			} else {
-				//If there is some other guy who pushes before me, just keep his version...
-				stencil.syncLocalAndRemoteBranches(repoPath, host, view, function(err, result) {
-					util.keepNewCommitAndRemoveOldOne(postsMetaFilePath, function(){
-						util.downloadPosts(groupName, userID, view, function() {
-							releaseViewPostsFileLock()
-							callback()
+	util.lock(viewPostsFilePath, function(releaseViewPostsFileLock){
+
+		var downloadReqID = util.createRandom()
+		var uploadReqID = util.createRandom()
+
+		var req = {}
+		req.type = 'upload'
+		req.groupName = groupName
+		req.userID = userID
+		req.posts = posts
+		req.view = view
+		req.uploadType = 'update'
+		req.id = uploadReqID
+
+		process.send(req)
+
+		process.on('message', function(msg) {
+			if (msg.type == 'Upload Succeeded' && msg.id == uploadReqID) {
+				var err = msg.err
+
+				if (err == null) {
+					util.createJSONFileLocally(viewPostsFilePath, posts, function(){
+						releaseViewPostsFileLock()
+						callback()
+					})
+				} else {
+					//If there is some other guy who pushes before me, just keep his version...
+					stencil.syncLocalAndRemoteBranches(repoPath, host, view, function(err, result) {
+						util.keepNewCommitAndRemoveOldOne(postsMetaFilePath, function() {
+
+							var req = {}
+							req.type = 'download'
+							req.groupName = groupName
+							req.userID = userID
+							req.view = view
+							req.id = downloadReqID
+
+							process.send(req)
 						})
 					})
-				})
+				}
+			} else if (msg.type == 'Download Succeeded' && msg.id == downloadReqID) {
+				releaseViewPostsFileLock()
+				callback()
 			}
 		})
 	})
@@ -89,6 +115,7 @@ function lockAndMergeFile() {
 setInterval(function () {
 	lockAndMergeFile()
 }, syncCycle)
+
 
 process.on('message', function (msg) {
     if (msg === 'shutdown') {

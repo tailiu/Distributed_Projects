@@ -26,12 +26,26 @@ function lockAndUpdateFile() {
 							process.send(process.pid + ' sync bot, tries to lock ' + postsFilePath)
 							util.lock(postsFilePath, function(releasePostFileLock) {
 								process.send(process.pid + ' prior to downloading')
-								util.downloadPosts(groupName, userID, view, function() {
-									process.send(process.pid + ' finish downloading')
-									process.send('finish ' + process.pid + ' sync bot, unlock branch ' + branchLockFilePath)
-									releaseBranchLock()
-									process.send('finish ' + process.pid + ' sync bot, unlock ' + postsFilePath)
-									releasePostFileLock()
+
+								var downloadReqID = util.createRandom()
+
+								var req = {}
+								req.type = 'download'
+								req.groupName = groupName
+								req.userID = userID
+								req.view = view
+								req.id = downloadReqID
+
+								process.send(req)
+
+								process.on('message', function(msg) {
+									if (msg.type == 'Download Succeeded' && msg.id == downloadReqID) {
+										process.send(process.pid + ' finish downloading')
+										process.send('finish ' + process.pid + ' sync bot, unlock branch ' + branchLockFilePath)
+										releaseBranchLock()
+										process.send('finish ' + process.pid + ' sync bot, unlock ' + postsFilePath)
+										releasePostFileLock()
+									}
 								})
 							})
 						} 

@@ -140,14 +140,14 @@ exports.getJSONFileContentLocally = function(filePath, callback) {
 	getJSONFileContentLocally(filePath, callback)
 }
 
-exports.downloadPosts = function(groupName, userID, view, callback) {
+exports.downloadPosts = function(groupName, userID, view, downloadClient, callback) {
 	var repoPath = getClonedRepoPath(groupName, userID)
 	var postsMetaFilePath = getFilePathInRepo(repoPath, postsMetaFile)
 
 	getJSONFileContentLocally(postsMetaFilePath, function(postsMetaContent) {
 		var postsFileName = getDownloadedPostsFileName(groupName, view)
 		var postsFilePath = getDownloadedFilePath(userID, postsFileName)
-		stencil.getFileFromTorrent(postsMetaContent.seeds, postsFilePath, function() {
+		stencil.getFileFromTorrent(postsMetaContent.seeds, postsFilePath, downloadClient, function() {
 
 			getJSONFileContentLocally(postsFilePath, function(posts) {
 				callback(posts)
@@ -185,13 +185,13 @@ exports.keepNewCommitAndRemoveOldOne = function(filePath, callback) {
 	})
 }
 
-exports.createOrUpdatePosts = function(groupName, userID, content, option, view, callback) {
+exports.createOrUpdatePosts = function(groupName, userID, content, option, view, seedClient, callback) {
 	var fileDir = getUploadedFilesDir(userID)
 	var host = getHost(userID, groupName)
 	var repoPath = getClonedRepoPath(groupName, userID)
 
 	createTmpFile(fileDir, JSON.stringify(content), function(filePath) {
-		stencil.createFileInTorrent(filePath, function(filemeta) {
+		stencil.createFileInTorrent(filePath, seedClient, function(filemeta) {
 			var postsMetaFilePath = getFilePathInRepo(repoPath, postsMetaFile)
 			stencil.createOrUpdateFileInRepo(postsMetaFilePath, JSON.stringify(filemeta), option, host, view, function(err) {
 				callback(err)
@@ -226,4 +226,10 @@ exports.filterPosts = function(posts, filterKeyWords) {
 		posts.splice(removeValFromIndex[i], 1)
 	}
 	return posts
+}
+
+exports.createRandom = function() {
+	var current_date = (new Date()).valueOf().toString()
+	var random = Math.random().toString()
+	return crypto.createHash('sha1').update(current_date + random).digest('hex')
 }

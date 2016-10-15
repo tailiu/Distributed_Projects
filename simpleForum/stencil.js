@@ -118,32 +118,37 @@ exports.createOrUpdateFileInRepo = function(filePath, content, option, host, bra
   })
 }
 
-exports.createFileInTorrent = function(filePath, callback) {
+exports.createTorrentClient = function() {
+  return new WebTorrent({ dht: false, tracker: false })
+}
+
+exports.createFileInTorrent = function(filePath, client, callback) {
   var filemeta = {}
-  var torrent = new WebTorrent({ dht: false, tracker: false })
+
+  client = new WebTorrent({ dht: false, tracker: false })
 
   filemeta.createTs = new Date()
   
-  torrent.seed(filePath , function (value) {
+  client.seed(filePath , function (torrent) {
     filemeta.seeds = []
     filemeta.seeds[0] = {}
-    filemeta.seeds[0].infoHash = value.infoHash
+    filemeta.seeds[0].infoHash = torrent.infoHash
     filemeta.seeds[0].ipAddr = getLocalIpAddr()
-    filemeta.seeds[0].torrentPort = torrent.torrentPort
+    filemeta.seeds[0].torrentPort = client.torrentPort
 
     callback(filemeta)
   })
   
 }
 
-function downloadFile(torrentSeeds, downloadedFilePath, callback) {
+function downloadFile(torrentSeeds, downloadedFilePath, client, callback) {
   var ws = fs.createWriteStream(downloadedFilePath)
-  var client = new WebTorrent({ dht: false, tracker: false })
-  var torrent = client.add(torrentSeeds[0].infoHash)
   var rs
+  var torrent
   var timeout = false
   var notTimeout = false
 
+  torrent = client.add(torrentSeeds[0].infoHash)
   torrent.addPeer(torrentSeeds[0].ipAddr + ':' + torrentSeeds[0].torrentPort)
 
   torrent.on('done', function() {
@@ -153,7 +158,9 @@ function downloadFile(torrentSeeds, downloadedFilePath, callback) {
         rs = file.createReadStream()
         rs.pipe(ws)
         rs.on('end', function(){
-          callback()
+          client.remove(torrentSeeds[0].infoHash, function() {
+            callback()
+          })
         })
       })
     }
@@ -163,27 +170,20 @@ function downloadFile(torrentSeeds, downloadedFilePath, callback) {
     if (!notTimeout) {
       timeout = true
       console.log('timeout')
-      downloadFile(torrentSeeds, downloadedFilePath, callback)
+      client.remove(torrentSeeds[0].infoHash, function() {
+        downloadFile(torrentSeeds, downloadedFilePath, client, callback)
+      })
     }
   }, 2000)
 }
 
-exports.getFileFromTorrent = function(torrentSeeds, downloadedFilePath, callback) {
+exports.getFileFromTorrent = function(torrentSeeds, downloadedFilePath, client, callback) {
   var fileName = getFileNameFromFilePath(downloadedFilePath)
   var fileDir = getFileDirFromFilePath(downloadedFilePath, fileName)
 
   mkdirp.sync(fileDir)
 
-  fs.exists(downloadedFilePath, function(exists) {
-    if (!exists) {
-      fs.writeFile(downloadedFilePath, '[]', function(err) {
-        downloadFile(torrentSeeds, downloadedFilePath, callback)
-      })
-    } else {
-      downloadFile(torrentSeeds, downloadedFilePath, callback)
-    }
-  })
-  
+  downloadFile(torrentSeeds, downloadedFilePath, client, callback)
 }
 
 function handleErr(err) {
