@@ -1,0 +1,14 @@
+doctype html
+html(lang="en")
+  head
+    title Create Team
+  body.
+    <h1>Create Team</h1>
+    <form method="post" action="http://localhost:3000/createTeam" id="newTeam">
+      <p><input type="text" name="teamName" value="" placeholder="team name"></p>
+      <p><input type="text" name="username" value="" placeholder="username"></p>
+      <p><input type="text" name="email" value="" placeholder="email"></p>
+      <p><input type="text" name="remote" value="" placeholder="user@serverIP"></p>
+      <p><textarea rows="6" cols="50" name="description" placeholder="team description" form="newTeam"></textarea></p>
+      <p><input type="submit" name="createTeam" value="Submit" ></p>
+    </form>

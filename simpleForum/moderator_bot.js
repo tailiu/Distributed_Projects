@@ -18,6 +18,15 @@ var viewPostsFilePath = util.getDownloadedFilePath(userID, viewPostsFileName)
 var branchLockFilePath = util.getBranchLockFilePath(userID, groupName)
 var postsMetaFilePath = util.getFilePathInRepo(repoPath, util.postsMetaFile)
 
+/*
+	pushToRemoteLogic:
+	lock the posts file for the view -> send request to master bot to ask it
+	to upload the filtered posts 
+		-> if no upload err, update the posts file. Done
+		-> if upload errs, it means there is some other guy who pushes before me,
+		just keep his version and give up mine. Done
+
+*/
 
 function pushToRemoteBranch(posts, callback) {
 
@@ -70,6 +79,22 @@ function pushToRemoteBranch(posts, callback) {
 	})
 }
 
+/*
+	Moderator bot logic:
+	lock branch -> change branch -> merge current branch with master branch
+	-> lock master branch posts file(outside repo) -> get posts of master branch
+	-> filter the posts based on the rule-> call pushToRemoteBranch() to push 
+	filterd results to remote branch 
+	
+
+	The reason why I maintain a file containing posts for each branch outside the repo
+	is that when, periodically, web page needs to be refreshed, just read this file to get
+	the posts. So no need to download the post file each time, since repo only stores metadata.
+	You can also use other methods, for example, use a file to store the change status 
+	rather than the posts. Those methods all have their own pros and cons.
+
+*/
+
 function lockAndMergeFile() {
 	process.send(process.pid + ' moderator bot, tries to lock branch ' + branchLockFilePath)
 	util.lock(branchLockFilePath, function(releaseBranchLock) {
@@ -78,7 +103,6 @@ function lockAndMergeFile() {
 			if (err == null) {
 				stencil.mergeBranch(repoPath, masterView, function(err, result) {
 					//If master branch has new commits, these commits cause unmerged errors.
-					//So far, all the errors have happened in the posts meta file
 					if (err != null) {
 						//Download the lastest posts from master branch
 						process.send(process.pid + ' moderator bot, tries to lock ' + masterViewPostsFilePath)

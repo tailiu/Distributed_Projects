@@ -15,8 +15,6 @@ var _ = require('underscore')
 var request = require('request')
 var cluster = require('cluster')
 var util = require('./util')
-var WebTorrent = require('webtorrent')
-var lockfile = require('proper-lockfile') 
 
 var REORDER = 0
 var ORDER = 1
@@ -79,34 +77,11 @@ var responseBots = []
 var moderatorBots = []
 var syncBots = []
 
-function getAccount() {
-	var account = childProcess.execSync('whoami')
-	account = (account + '').replace(/(\r\n|\n|\r)/gm,"")
-	return account
-}
-
 //find current account on the machine
 function findCurrentAccount() {
 	var account = childProcess.execSync('whoami')
 	account = (account + '').replace(/(\r\n|\n|\r)/gm,"")
 	return account
-}
-
-function sortPosts(posts, sort) {
-	if (sort == REORDER || sort == null) {
-		posts.sort(function (a, b) {
-			c = new Date(a.lastUpadateTs)
-			d = new Date(b.lastUpadateTs)
-			return d-c;
-		})
-	} else {
-		posts.sort(function (a, b) {
-			c = new Date(a.lastUpadateTs)
-			d = new Date(b.lastUpadateTs)
-			return c-d;
-		})
-	}
-	return posts
 }
 
 function filterPosts(posts, tag) {
@@ -195,79 +170,10 @@ function createUser(username, callback) {
 	})
 }
 
-//Initial page
-app.post('/initial-page', function(req, res) {
-    var username = req.body.username
-    var password = req.body.password
-    var op = req.body.login
-    if (op == undefined) {
-    	res.render('register')
-    } else {
-    	stencil.getUserInfo(username, function (usermeta) {
-    		if (usermeta == undefined) {
-    			res.end("<html> <header> " + username + " does not exist! </header> </html>")
-    		} else {
-    			var groupName
-	    		var groups = JSON.parse(usermeta).groups
-	    		if (groups.length > 0) {
-	    			groupName = []
-	    			for (var i = 0; i < groups.length; i++) {
-	    				groupName[i] = groups[i].groupName
-	    			}
-	    			sendPages(res, username, groupName, null, null, 'selectGroup', null)
-	    		} else {
-	    			sendPages(res, username, null, null, null, 'homepage/group', null)
-	    		}
-    		}
-		})
-    }
-});
-
-//Deal with select group
-app.post('/selectGroup', function(req, res) {
-    var username = req.body.username
-    var groupName = req.body.groupName
-    sendPages(res, username, groupName, null, null, 'homepage/tags', null)
-});
-
-//Show all the posts with tage life
-app.get('/homepage/life', function(req, res) {
-	var username = req.query.username
-	var groupName = req.query.groupName
-	sendPages(res, username, groupName, REORDER, 'life', 'homepage/tags', null)
-});
-
-//Show all the posts with tag study
-app.get('/homepage/study', function(req, res) {
-	var username = req.query.username
-	var groupName = req.query.groupName
-	sendPages(res, username, groupName, REORDER, 'study', 'homepage/tags', null)
-});
-
-//Show all the posts with tag work
-app.get('/homepage/work', function(req, res) {
-	var username = req.query.username
-	var groupName = req.query.groupName
-	sendPages(res, username, groupName, REORDER, 'work', 'homepage/tags', null)
-	
-});
-
 //User logout
 app.get('/homepage/logout', function(req, res) {
 	var username = req.query.username
 	res.end("<html> <header> BYE " + username + "! </header> </html>")
-})
-
-//Add a new comment to a post
-app.post('/homepage/newComment', function(req, res) {
-	var username = req.body.username
-	var replyTo = req.body.replyTo
-	var comment = req.body.comment
-	var postName = req.body.postName
-	var groupName = req.body.groupName
-	stencil.updateFile(username, postName, groupName, replyTo, comment, function (){
-		sendPages(res, username, groupName, REORDER, null, 'homepage/tags', null)
-	})
 })
 
 function getSSHPubKeyFilePath(userID) {
@@ -879,7 +785,6 @@ function changeCurrentView(userID, groupName, chosenView, callback) {
 						console.log('checkout to branch first time err' + err)
 					}
 
-					console.log('{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{' + chosenView)
 					var downloadReqID = util.createRandom()
 
 					var req = {}
@@ -892,7 +797,7 @@ function changeCurrentView(userID, groupName, chosenView, callback) {
 					process.send(req)
 
 					process.on('message', function(msg) {
-						console.log('|||||||||||||||||||||||||||||||||||||||||||||||||||')
+
 						if (msg.type == 'Download Succeeded' && msg.id == downloadReqID) {
 							createBotReq(userID, groupName, chosenView, undefined, 'sync', function(err) {
 								console.log('response bot ' + process.pid + 'change to branch first time, release branch lock')
@@ -999,6 +904,16 @@ function messageHandlerInMaster(message, worker) {
 }
 
 if (cluster.isMaster) {
+	/*
+		Master bot is responsible for maintaining two Torrent clients for 
+		all other bots. One for downloading and another one for uploading. 
+
+		Master bot is also responsible for creating response bots initially. 
+		It can also create sync bots and moderator bots on request by 
+		response bots. Finally, Master bot can also create a new bot 
+		once the previous one is dead because of some reasons.
+
+	*/
 	var seedClient = stencil.createTorrentClient()
 	var downloadClient = stencil.createTorrentClient()
 
@@ -1015,6 +930,12 @@ if (cluster.isMaster) {
 		restartBot(worker.process.pid)
 	})
 } else {
+	/*
+		Response bot is responsible for reponsing to all kinds of requests 
+		and asking master bot to create sync bot and moderator bot as necessary.
+
+	*/
+
 	var httpServer = http.createServer(app)
 
 	process.once('SIGINT', function(){

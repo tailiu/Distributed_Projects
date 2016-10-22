@@ -13,6 +13,13 @@ var postsFileName = util.getDownloadedPostsFileName(groupName, view)
 var postsFilePath = util.getDownloadedFilePath(userID, postsFileName)
 var branchLockFilePath = util.getBranchLockFilePath(userID, groupName)
 
+
+/*
+	Sync bot logic:
+	lock branch -> change to view -> sync the local view with remote view 
+	-> if not already up-to-date locally, update locally
+*/
+
 function lockAndUpdateFile() {
 	process.send(process.pid + ' sync bot, tries to lock branch ' + branchLockFilePath)
 	util.lock(branchLockFilePath, function(releaseBranchLock) {

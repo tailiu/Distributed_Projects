@@ -1,0 +1,126 @@
+a, a:visited{
+    text-decoration: none;
+    color: black;
+}
+.section {
+    border-style: solid;
+    border-width: 1px;
+    padding: 10px;
+    overflow:hidden;
+    font: 13px/20px 'Lucida Grande', Tahoma, Verdana, sans-serif;
+    color: #404040;
+    font-size: 13px;
+}
+.MyGroupSection {
+    border-style: solid;
+    border-width: 1px;
+    padding: 10px;
+    overflow:hidden;
+    font: 13px/20px 'Lucida Grande', Tahoma, Verdana, sans-serif;
+    color: #404040;
+    font-size: 13px;
+}
+.commentSection {
+    border-style: solid;
+    border-width: 1px;
+    padding: 15px;
+    overflow:hidden;
+    font: 13px/20px 'Lucida Grande', Tahoma, Verdana, sans-serif;
+    color: #404040;
+    font-size: 12px;
+}
+.commentPostSection {
+    border-style: solid;
+    border-width: 1px;
+    padding: 15px;
+    overflow:hidden;
+    font: 13px/20px 'Lucida Grande', Tahoma, Verdana, sans-serif;
+    color: #404040;
+    font-size: 15px;
+}
+#logoutButton {
+    position: absolute;
+    right: 6px;
+    top: 5px;
+    z-index: 1;
+}
+#header {
+    background-color:black;
+    color:white;
+    text-align:center;
+    padding:5px;
+    height:30%;
+}
+#nav {
+    line-height:50px;
+    background-color:#C0C0C0;
+    height:518px;
+    width:20%;
+    float:left;
+    padding:10px;   
+    font-size: 18px;
+    color:#000000;
+}
+#tagsForm > input.taglinks { 
+    background:none;border:none; 
+}
+#mainSection {
+    width:75%;
+    float:left;
+    padding:20px;        
+}
+form {
+    display: inline; 
+}
+#button {
+    display: inline;
+}
+
+
+input { font: 13px/20px 'Lucida Grande', Tahoma, Verdana, sans-serif; }
+  
+a {
+    text-decoration:none; 
+}
+  
+a:hover { text-decoration:underline; }
+  
+#wrapper {
+    margin:0;
+    padding-bottom:25px;
+    width:100%;
+    text-align:center;
+    font: 13px/20px 'Lucida Grande', Tahoma, Verdana, sans-serif;
+}
+  
+#chatbox {
+    text-align:left;
+    margin:0 auto;
+    margin-bottom:25px;
+    padding:10px;
+    height:270px;
+    width:90%;
+    border:5px solid #DCDCDC;
+    overflow:auto;
+    font: 13px/20px 'Lucida Grande', Tahoma, Verdana, sans-serif;
+}
+  
+#userMsg {
+    text-align:left;
+    height:30px;
+    width:60%;
+    border:3px solid #DCDCDC;
+    font: 13px/20px 'Lucida Grande', Tahoma, Verdana, sans-serif;
+}
+  
+#menu { padding:12.5px 25px 12.5px 25px; }
+  
+#channelInvitation { float:left; }
+
+#channelInvitation button {
+    background:none;
+    border:none; 
+    padding:0;
+    font: inherit;
+    cursor: pointer; 
+}

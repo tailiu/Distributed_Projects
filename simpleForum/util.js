@@ -98,7 +98,7 @@ function getFileDirFromFilePath(path, fileName) {
 	return path.replace(fileName, '')
 }
 
-
+//master view name
 exports.masterView = masterView
 
 exports.postsMetaFile = postsMetaFile

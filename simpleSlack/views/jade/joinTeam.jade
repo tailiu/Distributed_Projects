@@ -1,0 +1,15 @@
+doctype html
+html(lang="en")
+  head
+    title Join Team
+  body
+    #header
+      h1 Join Team
+    #mainSection
+    script
+      |invitationID = !{invitationID};
+      |flatTeamName = !{flatTeamName};
+      |inviteeEmail = !{inviteeEmail};
+      |encodedPublicKey = !{encodedPublicKey};
+      include ../script/joinTeam.js
+    
