@@ -121,19 +121,6 @@ function findCurrentAccount() {
   return account
 }
 
-//Initial page
-app.post('/initial-page', function(req, res) {
-    if (req.body.createNewTeam != undefined) {
-    	res.render('createTeam')
-    }
-})
-
-//User logout
-app.get('/logout', function(req, res) {
-	var username = req.query.username
-	res.end("<html> <header> BYE " + username + "! </header> </html>")
-})
-
 function getJSONFileContentLocally(filePath, callback) {
 	if (!fs.existsSync(filePath)) {
 		callback(undefined)
@@ -174,54 +161,6 @@ function replaceHashedPublicKeyWithUserName(messageLogContent, userID, teamName)
 	return messageLogContent
 }
 
-app.get('/renderChannel', function(req, res) {
-	var hashedPublicKey = req.query.hashedPublicKey
-	var username = req.query.username
-	var readableTeamName = req.query.readableTeamName
-	var flatTeamName = req.query.flatTeamName
-	var flatCName = req.query.flatCName
-
-	var data = {}
-	data.hashedPublicKey = hashedPublicKey
-	data.username = username
-	data.readableTeamName = readableTeamName
-	data.flatTeamName = flatTeamName
-	data.flatCName = flatCName
-
-	var channelRepoPath = getClonedRepoPath(flatCName, hashedPublicKey)
-	stencil.syncRepo(channelRepoPath, function() {
-		getMessageLogContent(channelRepoPath, hashedPublicKey, function(messageLogContent) {
-			data.msgs = replaceHashedPublicKeyWithUserName(messageLogContent, hashedPublicKey, flatTeamName)
-			sendPages(res, data, '/homepage/channels/renderChannel')
-		})
-	})
-})
-
-//Deal with refresh request from browser periodically
-app.post('/refreshChannelMsgs', function(req, res) {
-    var hashedPublicKey = req.body.hashedPublicKey
-    var flatTeamName = req.body.flatTeamName
-    var chosenChannel = req.body.chosenChannel
-
-    var data = {}
-
-    var channelRepoPath = getClonedRepoPath(chosenChannel, hashedPublicKey)
-	stencil.syncRepo(channelRepoPath, function(updated) {
-		data.updated = updated
-		if (updated) {
-			getMessageLogContent(channelRepoPath, hashedPublicKey, function(messageLogContent) {
-    			data.msgs = replaceHashedPublicKeyWithUserName(messageLogContent, hashedPublicKey, flatTeamName)
-				var result = '<html>' + JSON.stringify(data) + '</html>'
-				res.end(result)
-			})
-		} else {
-			var result = '<html>' + JSON.stringify(data) + '</html>'
-			res.end(result)
-		}
-	})    
-
-})
-
 function createOrUpdateMesageLogContent(userID, content, repoPath, option, callback) {
 	var fileDir = getUploadedFilesDir(userID)
 	createTmpFile(fileDir, JSON.stringify(content), function(filePath) {
@@ -253,38 +192,6 @@ function updateMsg(userID, flatCName, message, callback) {
 		})					
 	})
 }
-
-//Cope with user message
-app.post('/userMsg', function(req, res) {
-	var hashedPublicKey = req.body.hashedPublicKey
-	var username = req.body.username
-	var readableTeamName = req.body.readableTeamName
-	var flatTeamName = req.body.flatTeamName 
-	var flatCName = req.body.flatCName
-	var message = req.body.message
-
-	var data = {}
-	data.hashedPublicKey = hashedPublicKey
-	data.username = username
-	data.readableTeamName = readableTeamName
-	data.flatTeamName = flatTeamName
-	data.flatCName = flatCName
-
-	updateMsg(hashedPublicKey, flatCName, message, function(messageLogContent) {
-		data.msgs = replaceHashedPublicKeyWithUserName(messageLogContent, hashedPublicKey, flatTeamName)
-		sendPages(res, data, '/homepage/channels/renderChannel')
-	})
-})
-
-app.post('/getChannels', function(req, res) {
-	var data = {}
-	data.username = req.body.username
-	data.hashedPublicKey = req.body.hashedPublicKey
-	data.flatTeamName = req.body.flatTeamName
-	data.readableTeamName = req.body.readableTeamName
-
-	sendPages(res, data, '/homepage/channels/getChannels')
-})
 
 //Store the public key to 'email-public.pem' and the private to 'email-private.pem'
 //This is just a temporary method, because in the development, I need to test 
@@ -732,52 +639,6 @@ function cloneRepo(userID, teamOrChannelName, serverAddr) {
 	stencil.cloneRepo(remoteTeamRepoLocation, clonedRepoDir) 
 }
 
-//Create a team
-app.post('/createTeam', function(req, res) {
-	var email = req.body.email
-	var username = req.body.username
-	var readableTeamName = req.body.teamName
-	var serverAddr = req.body.remote
-	var description = req.body.description
-
-	var done = false
-	var creatorPublicKey
-
-	//store public key and private key in email-public.pem and email-private.pem respectively.
-	//This is an expedient method to distinguish different users on the local machine for testing use.
-	//In the future, the key should be stored locally in a well-known place
-	creatorPublicKey = getPublicKeyLocally(email)
-	if (creatorPublicKey == undefined) {
-		createUser(email, function(pubKey, priKey) {
-			creatorPublicKey = pubKey
-			done = true
-		})
-	} else {
-		done = true
-	}
-	deasync.loopWhile(function(){return !done})
-
-	var userID = calculateHash(creatorPublicKey)
-
-	createTeamOrChannel(userID, serverAddr, email, description, readableTeamName, username, null, 'team', undefined, function(teamName) {
-
-		var generalChannelDescription = 'team wide communication and announcement'
-		var generalChannelReadableName = 'general'
-		createTeamOrChannel(userID, serverAddr, email, generalChannelDescription, generalChannelReadableName, username, teamName, 'public channel', undefined, function() {
-
-			var data = {}
-			data.flatTeamName = teamName
-			data.readableTeamName = readableTeamName
-			data.username = username
-			data.hashedPublicKey = userID
-			sendPages(res, data, '/homepage/channels/getChannels')
-
-		})
-
-	})
-
-})
-
 function sendInvitationEmail(flatTeamNameOrChannelName, readableTeamOrChannelName, hashedPublicKey, username, inviteeEmails, additionalInfo, callback) {
 	var publicKeyRepoPath
 	if (additionalInfo.option == 'team' || additionalInfo.option == 'private') {
@@ -860,94 +721,6 @@ function getUserEamil(teamName, userID) {
 	return undefined
 }
 
-//invite a team member to a particular channel
-app.post('/inviteToChannel', function(req, res) {
-	var list = req.body.inviteeList
-	var hashedPublicKey = req.body.hashedPublicKey
-    var flatTeamName = req.body.flatTeamName
-    var chosenChannel = req.body.chosenChannel  
-    var username = req.body.username
-    var readableTeamName = req.body.readableTeamName
-
-    var additionalInfo = {}
-	additionalInfo.readableTeamName = readableTeamName
-	additionalInfo.flatTeamName = flatTeamName
-
-	var inviteeList
-	if (_.isArray(list)){
-		inviteeList = list
-	} else {
-		inviteeList = []
-		inviteeList.push(list)
-	}
-
-	var inviteeEmails = []
-	for (var i in inviteeList) {
-		var email = getUserEamil(flatTeamName, inviteeList[i])
-		inviteeEmails.push(email)
-	}
-
-	findChannelsUserIn(hashedPublicKey, flatTeamName, function(channelsUserIn) {
-		for (var i in channelsUserIn) {
-			if (channelsUserIn[i].flatName == chosenChannel) {
-				var readableName = channelsUserIn[i].readableName
-				additionalInfo.option = channelsUserIn[i].type
-				break
-			}
-		}
-
-		sendInvitationEmail(chosenChannel, readableName, hashedPublicKey, username, inviteeEmails, additionalInfo, function() {
-
-			var data = {}
-			data.hashedPublicKey = hashedPublicKey
-			data.username = username
-			data.readableTeamName = readableTeamName
-			data.flatTeamName = flatTeamName
-			data.flatCName = chosenChannel
-
-			var channelRepoPath = getClonedRepoPath(chosenChannel, hashedPublicKey)
-			stencil.syncRepo(channelRepoPath, function() {
-				getMessageLogContent(channelRepoPath, hashedPublicKey, function(messageLogContent) {
-					data.msgs = replaceHashedPublicKeyWithUserName(messageLogContent, hashedPublicKey, flatTeamName)
-					sendPages(res, data, '/homepage/channels/renderChannel')
-				})
-			})
-		})
-	})
-})
-
-
-//invite a user to this team
-app.post('/inviteToTeam', function(req, res) {
-	var hashedPublicKey = req.body.hashedPublicKey
-	var flatTeamName = req.body.flatTeamName
-	var inviteeEmail = req.body.inviteeEmail
-	var readableTeamName = req.body.readableTeamName
-	var username = req.body.username
-
-	var data = {}
-	data.flatTeamName = flatTeamName
-	data.readableTeamName = readableTeamName
-	data.username = username
-	data.hashedPublicKey = hashedPublicKey
-
-	var alreadyInTeam = checkAlreadyInTeam(inviteeEmail, flatTeamName, hashedPublicKey)
-
-	if (alreadyInTeam) {
-		sendPages(res, data, '/homepage/team/inviteToTeam/alreadyInTeam')
-	} else {
-		var additionalInfo = {}
-		additionalInfo.option = 'team'
-
-		var inviteeEmails = []
-		inviteeEmails.push(inviteeEmail)
-
-		sendInvitationEmail(flatTeamName, readableTeamName, hashedPublicKey, username, inviteeEmails, additionalInfo, function() {
-			sendPages(res, data, '/homepage/team/inviteToTeam/sentEmail')
-		})
-	}
-})
-
 function verifySignature(value, publicKey, signature) {
 	var verify = crypto.createVerify('SHA256')
 	verify.update(value)
@@ -961,93 +734,6 @@ function verifyValue(publicKey, value) {
 	var result = verifySignature(JSON.stringify(checkedValue), publicKey, value.signature)
 	return result
 }
-
-app.get('/acceptInvitationToChannel', function(req, res) {
-	var flatChannelName = req.query.channel
-	var invitationID = req.query.invitationID
-	var encodedPublicKey = req.query.encodedPublicKey
-	var flatTeamName = req.query.team
-
-	//get the local public key, for now, I just hardcode it
-	inviteePublicKey = getPublicKeyLocally('tl67@nyu.edu')
-	
-	var hashedInviteePublicKey = calculateHash(inviteePublicKey)
-
-	acceptInvitation(hashedInviteePublicKey, encodedPublicKey, undefined, flatChannelName, invitationID, flatTeamName, undefined, function(readableTeamName) {
-		var data = {}
-		data.hashedPublicKey = hashedInviteePublicKey
-		data.readableTeamName = readableTeamName
-		data.flatTeamName = flatTeamName
-		data.flatCName = flatChannelName
-
-		var memList = getMemList(hashedInviteePublicKey, flatTeamName)
-		var memberInfo = findMemberInfoFromMemList(memList, hashedInviteePublicKey)
-		data.username = memberInfo.username
-
-		var channelRepoPath = getClonedRepoPath(flatChannelName, hashedInviteePublicKey)
-		stencil.syncRepo(channelRepoPath, function() {
-			getMessageLogContent(channelRepoPath, hashedInviteePublicKey, function(messageLogContent) {
-				data.msgs = replaceHashedPublicKeyWithUserName(messageLogContent, hashedInviteePublicKey, flatTeamName)
-				sendPages(res, data, '/homepage/channels/renderChannel')
-			})
-		})
-	})
-})
-
-app.get('/acceptInvitationToTeam', function(req, res) {
-	var flatTeamName = req.query.team
-	var invitationID = req.query.invitationID
-	var inviteeEmail = req.query.inviteeEmail
-	var encodedPublicKey = req.query.encodedPublicKey
-	var dataCompleted = req.query.dataCompleted
-
-	var data = {}
-
-	if (dataCompleted == undefined) {
-
-		data.flatTeamName = flatTeamName
-		data.invitationID = invitationID
-		data.inviteeEmail = inviteeEmail
-		data.encodedPublicKey = encodedPublicKey
-
-		sendPages(res, data, 'joinTeam')
-
-	} else {
-		var username = req.query.username
-
-		var done = false
-		var inviteePublicKey
-		var inviteePrivateKey
-
-		//This is based on two assumptions: 
-		//first, we store public key in the email-public.pem 
-		//for testing multiple users on the same machine
-		//Second, users don't migrate between different machines,
-		//so users' public key must be in a fixed place, if user has an account
-		if (!fs.existsSync(inviteeEmail + '-public.pem')) {
-			createUser(inviteeEmail, function(pubKey, priKey) {
-				inviteePublicKey = pubKey
-				done = true
-			})
-		} else {
-			inviteePublicKey = getPublicKeyLocally(inviteeEmail)
-			done = true
-		}
-		deasync.loopWhile(function(){return !done})
-
-		var hashedInviteePublicKey = calculateHash(inviteePublicKey)
-
-		acceptInvitation(hashedInviteePublicKey, encodedPublicKey, username, flatTeamName, invitationID, flatTeamName, inviteeEmail, function(readableTeamName){
-			var data1 = {}
-			data1.readableTeamName = readableTeamName
-			data1.flatTeamName = flatTeamName 
-			data1.username = username
-			data1.hashedPublicKey = hashedInviteePublicKey
-
-			sendPages(res, data1, '/homepage/channels/getChannels')
-		})
-	}
-})
 
 function getTeamOrChannelInfoOnDHT(teamNameOrChannelName, publicKey, callback) {
 	stencil.getValueFromDHT(localDHTNode, DHTSeed, teamNameOrChannelName, function(metaOnDHT) {
@@ -1286,78 +972,6 @@ function processJoinTeamReq(username, hashedInviteePublicKey, SSHPublicKey, flat
 	})
 }
 
-
-//Process join team or join channel request
-app.post('/processAndResToJoinReq', function(req, res) {
-	var username = req.body.username
-	var SSHPublicKey = req.body.SSHPublicKey
-	var flatName = req.body.flatName
-	var invitationID = req.body.invitationID
-	var moderatorHashedPublicKey = req.body.moderatorHashedPublicKey
-	var hashedInviteePublicKey = req.body.hashedInviteePublicKey
-	var flatTeamName = req.body.flatTeamName
-	var inviteeEmail = req.body.inviteeEmail
-
-	//Actually, moderatorHashedPublicKey is not needed, because the moderator can calculate
-	//from its public key. But as I test multiple users on the same machine, I need it for now
-	var repoPath = getClonedRepoPath(flatName, moderatorHashedPublicKey)
-	var invitationMetaFilePath = getFilePathInRepo(repoPath, invitationMetaFile)
-	var fileContent = JSON.parse(stencil.getFileFromRepo(invitationMetaFilePath))
-
-	var found = false
-	for (var i in fileContent) {
-		if (fileContent[i].invitationID == invitationID && fileContent[i].status == 'pending') {
-			fileContent[i].joinTeamTs = new Date()
-			fileContent[i].hashedInviteePublicKey = hashedInviteePublicKey
-			fileContent[i].status = 'accepted'
-			found = true
-			break
-		}
-	}
-
-	if (found) {
-		stencil.createOrUpdateFileInRepo(invitationMetaFilePath, JSON.stringify(fileContent), 'update', function() {
-			if (username != undefined) {
-				processJoinTeamReq(username, hashedInviteePublicKey, SSHPublicKey, flatName, moderatorHashedPublicKey, inviteeEmail, function(err, serverAddr, knownHostKey, generalChannelFlatName) {
-					if (err != null) {
-						res.end(err)
-					} else {
-						var response = {}
-						response.type = 'Accept'
-						response.generalChannel = generalChannelFlatName
-						response.knownHostKey = knownHostKey
-						response.serverAddr = serverAddr
-						res.write(JSON.stringify(response))
-						
-						res.end()
-					}
-				})
-			} else {
-				processJoinChannelReq(hashedInviteePublicKey, SSHPublicKey, flatName, moderatorHashedPublicKey, flatTeamName, function(err, serverAddr, knownHostKey, channelType) {
-					if (err != null) {
-						res.end(err)
-					} else {
-						var response = {}
-						response.type = 'Accept'
-						response.knownHostKey = knownHostKey
-						response.serverAddr = serverAddr
-						res.write(JSON.stringify(response))
-						res.end()
-					}
-				})
-			}
-
-		})
-	} else {
-
-		var response = {}
-		response.type = 'No Such Invitation or the Invitation Has been resolved'
-		res.write(JSON.stringify(response))
-		res.end()
-
-	}
-})
-
 function difference(allTeamPublicChannels, allChannelsAndTeams) {
 	var publicChannelsUserNotIn = []
 	for (var i in allTeamPublicChannels) {
@@ -1535,6 +1149,393 @@ app.post('/browseAllChannels', function(req, res) {
 
 		sendPages(res, data, '/homepage/channels/browseAllChannels')
 	})
+})
+
+//Initial page
+app.post('/initial-page', function(req, res) {
+    if (req.body.createNewTeam != undefined) {
+    	res.render('createTeam')
+    }
+})
+
+//User logout
+app.get('/logout', function(req, res) {
+	var username = req.query.username
+	res.end("<html> <header> BYE " + username + "! </header> </html>")
+})
+
+//Process join team or join channel request
+app.post('/processAndResToJoinReq', function(req, res) {
+	var username = req.body.username
+	var SSHPublicKey = req.body.SSHPublicKey
+	var flatName = req.body.flatName
+	var invitationID = req.body.invitationID
+	var moderatorHashedPublicKey = req.body.moderatorHashedPublicKey
+	var hashedInviteePublicKey = req.body.hashedInviteePublicKey
+	var flatTeamName = req.body.flatTeamName
+	var inviteeEmail = req.body.inviteeEmail
+
+	//Actually, moderatorHashedPublicKey is not needed, because the moderator can calculate
+	//from its public key. But as I test multiple users on the same machine, I need it for now
+	var repoPath = getClonedRepoPath(flatName, moderatorHashedPublicKey)
+	var invitationMetaFilePath = getFilePathInRepo(repoPath, invitationMetaFile)
+	var fileContent = JSON.parse(stencil.getFileFromRepo(invitationMetaFilePath))
+
+	var found = false
+	for (var i in fileContent) {
+		if (fileContent[i].invitationID == invitationID && fileContent[i].status == 'pending') {
+			fileContent[i].joinTeamTs = new Date()
+			fileContent[i].hashedInviteePublicKey = hashedInviteePublicKey
+			fileContent[i].status = 'accepted'
+			found = true
+			break
+		}
+	}
+
+	if (found) {
+		stencil.createOrUpdateFileInRepo(invitationMetaFilePath, JSON.stringify(fileContent), 'update', function() {
+			if (username != undefined) {
+				processJoinTeamReq(username, hashedInviteePublicKey, SSHPublicKey, flatName, moderatorHashedPublicKey, inviteeEmail, function(err, serverAddr, knownHostKey, generalChannelFlatName) {
+					if (err != null) {
+						res.end(err)
+					} else {
+						var response = {}
+						response.type = 'Accept'
+						response.generalChannel = generalChannelFlatName
+						response.knownHostKey = knownHostKey
+						response.serverAddr = serverAddr
+						res.write(JSON.stringify(response))
+						
+						res.end()
+					}
+				})
+			} else {
+				processJoinChannelReq(hashedInviteePublicKey, SSHPublicKey, flatName, moderatorHashedPublicKey, flatTeamName, function(err, serverAddr, knownHostKey, channelType) {
+					if (err != null) {
+						res.end(err)
+					} else {
+						var response = {}
+						response.type = 'Accept'
+						response.knownHostKey = knownHostKey
+						response.serverAddr = serverAddr
+						res.write(JSON.stringify(response))
+						res.end()
+					}
+				})
+			}
+
+		})
+	} else {
+
+		var response = {}
+		response.type = 'No Such Invitation or the Invitation Has been resolved'
+		res.write(JSON.stringify(response))
+		res.end()
+
+	}
+})
+
+app.get('/acceptInvitationToChannel', function(req, res) {
+	var flatChannelName = req.query.channel
+	var invitationID = req.query.invitationID
+	var encodedPublicKey = req.query.encodedPublicKey
+	var flatTeamName = req.query.team
+
+	//get the local public key, for now, I just hardcode it
+	inviteePublicKey = getPublicKeyLocally('tl67@nyu.edu')
+	
+	var hashedInviteePublicKey = calculateHash(inviteePublicKey)
+
+	acceptInvitation(hashedInviteePublicKey, encodedPublicKey, undefined, flatChannelName, invitationID, flatTeamName, undefined, function(readableTeamName) {
+		var data = {}
+		data.hashedPublicKey = hashedInviteePublicKey
+		data.readableTeamName = readableTeamName
+		data.flatTeamName = flatTeamName
+		data.flatCName = flatChannelName
+
+		var memList = getMemList(hashedInviteePublicKey, flatTeamName)
+		var memberInfo = findMemberInfoFromMemList(memList, hashedInviteePublicKey)
+		data.username = memberInfo.username
+
+		var channelRepoPath = getClonedRepoPath(flatChannelName, hashedInviteePublicKey)
+		stencil.syncRepo(channelRepoPath, function() {
+			getMessageLogContent(channelRepoPath, hashedInviteePublicKey, function(messageLogContent) {
+				data.msgs = replaceHashedPublicKeyWithUserName(messageLogContent, hashedInviteePublicKey, flatTeamName)
+				sendPages(res, data, '/homepage/channels/renderChannel')
+			})
+		})
+	})
+})
+
+app.get('/acceptInvitationToTeam', function(req, res) {
+	var flatTeamName = req.query.team
+	var invitationID = req.query.invitationID
+	var inviteeEmail = req.query.inviteeEmail
+	var encodedPublicKey = req.query.encodedPublicKey
+	var dataCompleted = req.query.dataCompleted
+
+	var data = {}
+
+	if (dataCompleted == undefined) {
+
+		data.flatTeamName = flatTeamName
+		data.invitationID = invitationID
+		data.inviteeEmail = inviteeEmail
+		data.encodedPublicKey = encodedPublicKey
+
+		sendPages(res, data, 'joinTeam')
+
+	} else {
+		var username = req.query.username
+
+		var done = false
+		var inviteePublicKey
+		var inviteePrivateKey
+
+		//This is based on two assumptions: 
+		//first, we store public key in the email-public.pem 
+		//for testing multiple users on the same machine
+		//Second, users don't migrate between different machines,
+		//so users' public key must be in a fixed place, if user has an account
+		if (!fs.existsSync(inviteeEmail + '-public.pem')) {
+			createUser(inviteeEmail, function(pubKey, priKey) {
+				inviteePublicKey = pubKey
+				done = true
+			})
+		} else {
+			inviteePublicKey = getPublicKeyLocally(inviteeEmail)
+			done = true
+		}
+		deasync.loopWhile(function(){return !done})
+
+		var hashedInviteePublicKey = calculateHash(inviteePublicKey)
+
+		acceptInvitation(hashedInviteePublicKey, encodedPublicKey, username, flatTeamName, invitationID, flatTeamName, inviteeEmail, function(readableTeamName){
+			var data1 = {}
+			data1.readableTeamName = readableTeamName
+			data1.flatTeamName = flatTeamName 
+			data1.username = username
+			data1.hashedPublicKey = hashedInviteePublicKey
+
+			sendPages(res, data1, '/homepage/channels/getChannels')
+		})
+	}
+})
+
+//invite a team member to a particular channel
+app.post('/inviteToChannel', function(req, res) {
+	var list = req.body.inviteeList
+	var hashedPublicKey = req.body.hashedPublicKey
+    var flatTeamName = req.body.flatTeamName
+    var chosenChannel = req.body.chosenChannel  
+    var username = req.body.username
+    var readableTeamName = req.body.readableTeamName
+
+    var additionalInfo = {}
+	additionalInfo.readableTeamName = readableTeamName
+	additionalInfo.flatTeamName = flatTeamName
+
+	var inviteeList
+	if (_.isArray(list)){
+		inviteeList = list
+	} else {
+		inviteeList = []
+		inviteeList.push(list)
+	}
+
+	var inviteeEmails = []
+	for (var i in inviteeList) {
+		var email = getUserEamil(flatTeamName, inviteeList[i])
+		inviteeEmails.push(email)
+	}
+
+	findChannelsUserIn(hashedPublicKey, flatTeamName, function(channelsUserIn) {
+		for (var i in channelsUserIn) {
+			if (channelsUserIn[i].flatName == chosenChannel) {
+				var readableName = channelsUserIn[i].readableName
+				additionalInfo.option = channelsUserIn[i].type
+				break
+			}
+		}
+
+		sendInvitationEmail(chosenChannel, readableName, hashedPublicKey, username, inviteeEmails, additionalInfo, function() {
+
+			var data = {}
+			data.hashedPublicKey = hashedPublicKey
+			data.username = username
+			data.readableTeamName = readableTeamName
+			data.flatTeamName = flatTeamName
+			data.flatCName = chosenChannel
+
+			var channelRepoPath = getClonedRepoPath(chosenChannel, hashedPublicKey)
+			stencil.syncRepo(channelRepoPath, function() {
+				getMessageLogContent(channelRepoPath, hashedPublicKey, function(messageLogContent) {
+					data.msgs = replaceHashedPublicKeyWithUserName(messageLogContent, hashedPublicKey, flatTeamName)
+					sendPages(res, data, '/homepage/channels/renderChannel')
+				})
+			})
+		})
+	})
+})
+
+
+//invite a user to this team
+app.post('/inviteToTeam', function(req, res) {
+	var hashedPublicKey = req.body.hashedPublicKey
+	var flatTeamName = req.body.flatTeamName
+	var inviteeEmail = req.body.inviteeEmail
+	var readableTeamName = req.body.readableTeamName
+	var username = req.body.username
+
+	var data = {}
+	data.flatTeamName = flatTeamName
+	data.readableTeamName = readableTeamName
+	data.username = username
+	data.hashedPublicKey = hashedPublicKey
+
+	var alreadyInTeam = checkAlreadyInTeam(inviteeEmail, flatTeamName, hashedPublicKey)
+
+	if (alreadyInTeam) {
+		sendPages(res, data, '/homepage/team/inviteToTeam/alreadyInTeam')
+	} else {
+		var additionalInfo = {}
+		additionalInfo.option = 'team'
+
+		var inviteeEmails = []
+		inviteeEmails.push(inviteeEmail)
+
+		sendInvitationEmail(flatTeamName, readableTeamName, hashedPublicKey, username, inviteeEmails, additionalInfo, function() {
+			sendPages(res, data, '/homepage/team/inviteToTeam/sentEmail')
+		})
+	}
+})
+
+app.get('/renderChannel', function(req, res) {
+	var hashedPublicKey = req.query.hashedPublicKey
+	var username = req.query.username
+	var readableTeamName = req.query.readableTeamName
+	var flatTeamName = req.query.flatTeamName
+	var flatCName = req.query.flatCName
+
+	var data = {}
+	data.hashedPublicKey = hashedPublicKey
+	data.username = username
+	data.readableTeamName = readableTeamName
+	data.flatTeamName = flatTeamName
+	data.flatCName = flatCName
+
+	var channelRepoPath = getClonedRepoPath(flatCName, hashedPublicKey)
+	stencil.syncRepo(channelRepoPath, function() {
+		getMessageLogContent(channelRepoPath, hashedPublicKey, function(messageLogContent) {
+			data.msgs = replaceHashedPublicKeyWithUserName(messageLogContent, hashedPublicKey, flatTeamName)
+			sendPages(res, data, '/homepage/channels/renderChannel')
+		})
+	})
+})
+
+//Deal with refresh request from browser periodically
+app.post('/refreshChannelMsgs', function(req, res) {
+    var hashedPublicKey = req.body.hashedPublicKey
+    var flatTeamName = req.body.flatTeamName
+    var chosenChannel = req.body.chosenChannel
+
+    var data = {}
+
+    var channelRepoPath = getClonedRepoPath(chosenChannel, hashedPublicKey)
+	stencil.syncRepo(channelRepoPath, function(updated) {
+		data.updated = updated
+		if (updated) {
+			getMessageLogContent(channelRepoPath, hashedPublicKey, function(messageLogContent) {
+    			data.msgs = replaceHashedPublicKeyWithUserName(messageLogContent, hashedPublicKey, flatTeamName)
+				var result = '<html>' + JSON.stringify(data) + '</html>'
+				res.end(result)
+			})
+		} else {
+			var result = '<html>' + JSON.stringify(data) + '</html>'
+			res.end(result)
+		}
+	})    
+
+})
+
+
+//Cope with user message
+app.post('/userMsg', function(req, res) {
+	var hashedPublicKey = req.body.hashedPublicKey
+	var username = req.body.username
+	var readableTeamName = req.body.readableTeamName
+	var flatTeamName = req.body.flatTeamName 
+	var flatCName = req.body.flatCName
+	var message = req.body.message
+
+	var data = {}
+	data.hashedPublicKey = hashedPublicKey
+	data.username = username
+	data.readableTeamName = readableTeamName
+	data.flatTeamName = flatTeamName
+	data.flatCName = flatCName
+
+	updateMsg(hashedPublicKey, flatCName, message, function(messageLogContent) {
+		data.msgs = replaceHashedPublicKeyWithUserName(messageLogContent, hashedPublicKey, flatTeamName)
+		sendPages(res, data, '/homepage/channels/renderChannel')
+	})
+})
+
+app.post('/getChannels', function(req, res) {
+	var data = {}
+	data.username = req.body.username
+	data.hashedPublicKey = req.body.hashedPublicKey
+	data.flatTeamName = req.body.flatTeamName
+	data.readableTeamName = req.body.readableTeamName
+
+	sendPages(res, data, '/homepage/channels/getChannels')
+})
+
+
+//Create a team
+app.post('/createTeam', function(req, res) {
+	var email = req.body.email
+	var username = req.body.username
+	var readableTeamName = req.body.teamName
+	var serverAddr = req.body.remote
+	var description = req.body.description
+
+	var done = false
+	var creatorPublicKey
+
+	//store public key and private key in email-public.pem and email-private.pem respectively.
+	//This is an expedient method to distinguish different users on the local machine for testing use.
+	//In the future, the key should be stored locally in a well-known place
+	creatorPublicKey = getPublicKeyLocally(email)
+	if (creatorPublicKey == undefined) {
+		createUser(email, function(pubKey, priKey) {
+			creatorPublicKey = pubKey
+			done = true
+		})
+	} else {
+		done = true
+	}
+	deasync.loopWhile(function(){return !done})
+
+	var userID = calculateHash(creatorPublicKey)
+
+	createTeamOrChannel(userID, serverAddr, email, description, readableTeamName, username, null, 'team', undefined, function(teamName) {
+
+		var generalChannelDescription = 'team wide communication and announcement'
+		var generalChannelReadableName = 'general'
+		createTeamOrChannel(userID, serverAddr, email, generalChannelDescription, generalChannelReadableName, username, teamName, 'public channel', undefined, function() {
+
+			var data = {}
+			data.flatTeamName = teamName
+			data.readableTeamName = readableTeamName
+			data.username = username
+			data.hashedPublicKey = userID
+			sendPages(res, data, '/homepage/channels/getChannels')
+
+		})
+
+	})
+
 })
 
 var httpServer = http.createServer(app)
