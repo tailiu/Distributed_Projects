@@ -8,11 +8,12 @@
   },
   "keywords": [
     "distributed",
-    "storage"
+    "storage",
+    "browser"
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/tailiu/Distributed-Project/tree/master/webstencil"
+    "url": "https://github.com/tailiu/Distributed-Project/tree/master/WebStencil"
   },
   "author": "Tai Liu <tai.liu@outlook.com>",
   "license": "ISC",
