@@ -12,7 +12,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/kadtools/kad.git"
+    "url": "https://github.com/tailiu/Distributed-Project/tree/master/stencil"
   },
   "author": "Tai Liu <tai.liu@outlook.com>",
   "license": "ISC",
