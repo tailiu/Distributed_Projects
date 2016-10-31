@@ -41,7 +41,6 @@ Bucket.prototype.getContactList = function() {
  */
 Bucket.prototype.getContact = function(index) {
   assert(index >= 0, 'Contact index cannot be negative');
-  assert(index < constants.K, 'Contact index cannot be greater than K');
 
   return this._contacts[index] || null;
 };
@@ -49,11 +48,14 @@ Bucket.prototype.getContact = function(index) {
 /**
  * Adds the contact to the bucket
  * @param {Contact} contact - Contact instance to add to bucket
- * @returns {Bucket}
+ * @returns {Boolean} added - Indicates whether or not the contact was added
  */
 Bucket.prototype.addContact = function(contact) {
   assert(contact instanceof Contact, 'Invalid contact supplied');
-  assert(this.getSize() < constants.K, 'Bucket size cannot exceed K');
+
+  if (this.getSize() === constants.K) {
+    return false;
+  }
 
   if (!this.hasContact(contact.nodeID)) {
     var index = _.sortedIndex(this._contacts, contact, function(contact) {
@@ -63,22 +65,23 @@ Bucket.prototype.addContact = function(contact) {
     this._contacts.splice(index, 0, contact);
   }
 
-  return this;
+  return true;
 };
 
 /**
  * Removes the contact from the bucket
  * @param {Contact} contact - Contact instance to remove from bucket
- * @returns {Bucket}
+ * @returns {Boolean} removed - Indicates whether or not the contact was removed
  */
 Bucket.prototype.removeContact = function(contact) {
   var index = this.indexOf(contact);
 
   if (index >= 0) {
     this._contacts.splice(index, 1);
+    return true;
   }
 
-  return this;
+  return false;
 };
 
 /**

@@ -1,7 +1,6 @@
 const stencil = require('WebStencil')
 const fs = require('graceful-fs')
 const crypto = require('crypto')
-const format = require('biguint-format');
 const mkdirp = require('mkdirp')
 const lineByLine = require('n-readlines') 
 const lockfile = require('proper-lockfile') 

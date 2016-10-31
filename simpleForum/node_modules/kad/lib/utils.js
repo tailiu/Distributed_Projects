@@ -23,6 +23,10 @@ exports.isValidKey = function(key) {
  * @returns {String}
  */
 exports.createID = function(data) {
+  if (exports.isValidKey(data)) {
+    return data;
+  }
+
   return crypto.createHash('sha1').update(data).digest('hex');
 };
 

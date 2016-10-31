@@ -218,4 +218,22 @@ describe('Transports/UDP', function() {
 
   });
 
+  describe('#_send', function() {
+
+    it('should warn if message size exceeds max', function() {
+      var contact = new AddressPortContact({ address: '0.0.0.0', port: 0 });
+      var rpc = new RPC(contact);
+      var _warn = sinon.stub(rpc._log, 'warn');
+      var _send = sinon.stub(rpc._socket, 'send');
+      var data = Buffer(513);
+      data.fill(1);
+      rpc._send(data, { address: '127.0.0.1', port: 1337 });
+      _warn.restore();
+      _send.restore();
+      expect(_warn.called).to.equal(true);
+      expect(_send.called).to.equal(true);
+    });
+
+  });
+
 });

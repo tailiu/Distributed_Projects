@@ -92,6 +92,22 @@ describe('Bucket', function() {
       expect(bucket.getSize()).to.equal(1);
     });
 
+    it('should return false if the bucket is full', function() {
+      var bucket = new Bucket();
+      var counter = 0;
+      while(counter < 20) {
+        counter++;
+        bucket.addContact(AddressPortContact({
+          address: '127.0.0.1',
+          port: counter
+        }));
+      }
+      expect(bucket.addContact(AddressPortContact({
+        address: '127.0.0.1',
+        port: 1337
+      }))).to.equal(false);
+    });
+
   });
 
   describe('#removeContact', function() {
@@ -128,7 +144,9 @@ describe('Bucket', function() {
   describe('#hasContact', function() {
 
     var contact = AddressPortContact({ address: '0.0.0.0', port: 80 });
-    var bucket = Bucket().addContact(contact);
+    var bucket = Bucket();
+
+    bucket.addContact(contact);
 
     it('should return true because the contact exists', function() {
       var otherContact = AddressPortContact({ address: '0.0.0.0', port: 80 });
@@ -145,7 +163,9 @@ describe('Bucket', function() {
   describe('#indexOf', function() {
 
     var contact = AddressPortContact({ address: '0.0.0.0', port: 80 });
-    var bucket = Bucket().addContact(contact);
+    var bucket = Bucket();
+
+    bucket.addContact(contact);
 
     it('should return the index of the given contact object', function() {
       var otherContact = AddressPortContact({ address: '0.0.0.0', port: 80 });

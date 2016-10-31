@@ -2,8 +2,6 @@ var express = require('express')
 var querystring = require('querystring')
 var bodyParser = require('body-parser')
 var stencil = require('WebStencil')
-var deasync = require('deasync')
-var app = express()
 var childProcess = require('child-proc')
 var os = require('os')
 var mkdirp = require('mkdirp')
@@ -63,6 +61,7 @@ const forumPublicKey =
 'RQIDAQAB\n' + 
 '-----END PUBLIC KEY-----'
 
+var app = express()
 
 app.set('views', './views/jade')
 app.set('view engine', 'jade')
@@ -1070,6 +1069,16 @@ if (cluster.isMaster) {
 			}
 		})
 	})
+
+	//Initial page
+	app.post('/initial-page', function(req, res) {
+	    var username = req.body.username
+	    var password = req.body.password
+	    var op = req.body.login
+	    if (op == undefined) {
+	    	res.render('register')
+	    }
+	});
 
 	//User register
 	app.post('/register', function(req, res) {

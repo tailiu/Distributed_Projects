@@ -58,7 +58,6 @@ UDPTransport.prototype._open = function(done) {
  * @param {Contact} contact
  */
 UDPTransport.prototype._send = function(data, contact) {
-  /* istanbul ignore if */
   if (data.length > UDPTransport.MAX_MESSAGE_SIZE) {
     this._log.warn(
       'outbound message greater than %sb (%sb) and risks fragmentation',

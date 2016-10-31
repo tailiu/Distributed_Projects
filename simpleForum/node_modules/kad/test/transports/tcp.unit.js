@@ -52,14 +52,14 @@ describe('Transports/TCP', function() {
 
     before(function(done) {
       var count = 0;
-      function inc() {
-        count++;
-        ready();
-      }
       function ready() {
         if (count === 2) {
           done();
         }
+      }
+      function inc() {
+        count++;
+        ready();
       }
       rpc1 = new RPC(contact1);
       rpc2 = new RPC(contact2);
@@ -217,11 +217,15 @@ describe('Transports/TCP', function() {
 
   describe('#_send', function() {
 
-    it('should log an error if once is encountered', function() {
+    it('should log an error if once is encountered', function(done) {
       var emitter = new EventEmitter();
       emitter.write = sinon.stub();
       emitter.pipe = sinon.stub().returns(emitter);
       var contact = new AddressPortContact({ address: '0.0.0.0', port: 0 });
+      var recipient = new AddressPortContact({
+        address: '127.0.0.1',
+        port: 8080
+      });
       var TCP = proxyquire('../../lib/transports/tcp', {
         net: {
           createConnection: function() {
@@ -231,10 +235,11 @@ describe('Transports/TCP', function() {
       });
       var rpc = new TCP(contact);
       var _log = sinon.stub(rpc._log, 'error');
-      rpc._send(new Buffer(JSON.stringify({id:'id'})), contact);
+      rpc._send(new Buffer(JSON.stringify({id:'id'})), recipient);
       setImmediate(function() {
         emitter.emit('error', new Error('failed'));
         expect(_log.called).to.equal(true);
+        done();
       });
     });
   });

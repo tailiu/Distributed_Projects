@@ -10,12 +10,21 @@
   "author": "Tai Liu",
   "license": "ISC",
   "dependencies": {
-    "WebStencil": "0.0.1",
-    "body-parser": "^1.14.2",
+    "WebStencil": "0.0.2",
+    "body-parser": "^1.15.2",
+    "child-proc": "0.0.1",
+    "cluster": "^0.7.7",
     "crypto": "0.0.3",
-    "express": "^4.13.3",
-    "jade": "^1.11.0",
-    "mongoose": "^4.3.4",
+    "express": "^4.14.0",
+    "graceful-fs": "^4.1.9",
+    "http": "0.0.0",
+    "https": "^1.0.0",
+    "mkdirp": "^0.5.1",
+    "n-readlines": "^0.2.7",
+    "os": "^0.1.1",
+    "proper-lockfile": "^2.0.0",
+    "querystring": "^0.2.0",
+    "request": "^2.76.0",
     "underscore": "^1.8.3"
   }
 }
