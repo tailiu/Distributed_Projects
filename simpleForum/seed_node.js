@@ -1,5 +1,5 @@
 var kad = require('kad');
-var stencil = require('./stencil')
+var stencil = require('WebStencil')
 
 const DHTSeed = {
  	address: '127.0.0.1',

@@ -1,4 +1,4 @@
-const stencil = require('./stencil')
+const stencil = require('WebStencil')
 const fs = require('graceful-fs')
 const crypto = require('crypto')
 const format = require('biguint-format');

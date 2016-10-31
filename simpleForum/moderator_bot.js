@@ -1,4 +1,4 @@
-const stencil = require('./stencil')
+const stencil = require('WebStencil')
 const util = require('./util')
 
 const syncCycle = 3000
