@@ -1,1 +1,1 @@
-This is an initial version of the distributed project. It is still being developed.
+SimpleForum and SimpleSlack are built on Stencil which is a distributed storage system.
