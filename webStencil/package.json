@@ -1,7 +1,7 @@
 {
-  "name": "stencil",
+  "name": "WebStencil",
   "version": "0.0.1",
-  "description": "Stencil is a distributed storage system",
+  "description": "WebStencil is a distributed storage system used in web browser",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -12,7 +12,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/tailiu/Distributed-Project/tree/master/stencil"
+    "url": "https://github.com/tailiu/Distributed-Project/tree/master/webstencil"
   },
   "author": "Tai Liu <tai.liu@outlook.com>",
   "license": "ISC",
