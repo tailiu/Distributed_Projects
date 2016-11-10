@@ -55,7 +55,7 @@ function getLocalIpAddr() {
   return networkInterfaces.eth0[0].address
 }
 
-exports.syncLocalAndRemoteBranches = function(repoPath, host, branch, callback) {
+exports.syncBranch = function(repoPath, host, branch, callback) {
   try {
     var command = 'cd ' + repoPath + '\ngit pull ' + host + ' ' + branch + '\n'
     var result = childProcess.execSync(command)
@@ -106,7 +106,7 @@ function pushToGitRepo(fileDir, fileName, comment, host, branch, callback) {
   } 
 }
 
-exports.createOrUpdateFileInRepo = function(filePath, content, option, host, branch, callback) {
+exports.writeFileToRepo = function(filePath, content, option, host, branch, callback) {
   var fileName = getFileNameFromFilePath(filePath)
   var fileDir = getFileDirFromFilePath(filePath, fileName)
   
@@ -360,7 +360,7 @@ function addKey(adminRepoDir, key, keyName) {
   fs.writeFileSync(keyFilePath, key)
 }
 
-exports.addKeyAndUpdateConfigFileInAdminRepo = function(adminRepoDir, SSHPublicKey, keyName, repoName, host) {
+exports.addKeyToRepo = function(adminRepoDir, SSHPublicKey, keyName, repoName, host) {
   addKey(adminRepoDir, SSHPublicKey, keyName)
   updateConfig(adminRepoDir, repoName, keyName, host)
 }
@@ -431,7 +431,7 @@ function getRemoteOriginBranches(arr1) {
   return branchArr
 }
 
-exports.getAllRemoteBranches = function(repoPath) {
+exports.getBranchNames = function(repoPath) {
   var command = 'cd ' + repoPath + '\ngit fetch --all\ngit branch -a\n'
   var result = childProcess.execSync(command)
 
@@ -468,7 +468,7 @@ exports.mergeBranch = function(repoPath, branchName, callback) {
   }
 }
 
-exports.getCurrentBranch = function(repoPath) {
+exports.getCurrentBranchName = function(repoPath) {
   var command = 'cd ' + repoPath + '\ngit rev-parse --abbrev-ref HEAD\n'
   var result = childProcess.execSync(command)
   return result

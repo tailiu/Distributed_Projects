@@ -283,13 +283,13 @@ function appendToMemList(groupName, userID, newMem, view, callback) {
 	if (content == undefined) {
 		var members = []
 		members.push(newMem)
-		stencil.createOrUpdateFileInRepo(memListPath, JSON.stringify(members), 'create', host, masterView, function() {
+		stencil.writeFileToRepo(memListPath, JSON.stringify(members), 'create', host, masterView, function() {
 			callback()
 		})
 	} else {
 		var members = JSON.parse(content)
 		members.push(newMem)
-		stencil.createOrUpdateFileInRepo(memListPath, JSON.stringify(members), 'update', host, masterView, function() {
+		stencil.writeFileToRepo(memListPath, JSON.stringify(members), 'update', host, masterView, function() {
 			callback()
 		})
 	}
@@ -303,7 +303,7 @@ function addMember(groupName, newMem, SSHPublicKey, newMemHashedPublicKey, moder
 		var adminRepoDir = getAdminReposDir(moderatorID, serverAddr)
 		var host = util.getHost(moderatorID, groupName)
 
-		stencil.addKeyAndUpdateConfigFileInAdminRepo(adminRepoDir, SSHPublicKey, newMemHashedPublicKey, groupName, host)
+		stencil.addKeyToRepo(adminRepoDir, SSHPublicKey, newMemHashedPublicKey, groupName, host)
 
 		var serverAddrWithoutUserAccount = getServerAddrWithoutUserAccount(serverAddr)
 		var knownHostKey = stencil.getKnownHostKey(serverAddrWithoutUserAccount)
@@ -441,7 +441,7 @@ function createGroup(groupName, description, userID, serverAddr, username, callb
 	
 	var metaPath = util.getFilePathInRepo(repoPath, groupMetaFile)
 
-	stencil.createOrUpdateFileInRepo(metaPath, JSON.stringify(metaPutInRepo), 'create', host, masterView, function() {
+	stencil.writeFileToRepo(metaPath, JSON.stringify(metaPutInRepo), 'create', host, masterView, function() {
 		var memListInRepo = []
 		memListInRepo[0] = {}
 		memListInRepo[0].role = []
@@ -451,7 +451,7 @@ function createGroup(groupName, description, userID, serverAddr, username, callb
 		
 		var memListPath = util.getFilePathInRepo(repoPath, memListFile)
 
-		stencil.createOrUpdateFileInRepo(memListPath, JSON.stringify(memListInRepo), 'create', host, masterView, function() {
+		stencil.writeFileToRepo(memListPath, JSON.stringify(memListInRepo), 'create', host, masterView, function() {
 
 			var metaPutOnDHT = {}
 			metaPutOnDHT.description = description
@@ -598,7 +598,7 @@ function createBranchView(userID, groupName, view, filterKeyWords, callback) {
 									var filter = {}
 									filter.filterKeyWords = filterKeyWords
 
-									stencil.createOrUpdateFileInRepo(rulesFilePath, JSON.stringify(filter), 'create', host, view, function() {
+									stencil.writeFileToRepo(rulesFilePath, JSON.stringify(filter), 'create', host, view, function() {
 										console.log('create branch view, second, ' + process.pid + ' unlock branch')
 										releaseBranchLock()
 
@@ -646,7 +646,7 @@ function createBotReq(userID, groupName, view, filterKeyWords, type, callback) {
 
 function getAllViews(groupName, userID) {
 	var repoPath = util.getClonedRepoPath(groupName, userID)
-	return stencil.getAllRemoteBranches(repoPath)
+	return stencil.getBranchNames(repoPath)
 }
 
 function addNewPost(newOne, postsFilePath, groupName, userID, view, callback) {
@@ -692,7 +692,7 @@ function addNewPost(newOne, postsFilePath, groupName, userID, view, callback) {
 					callback(posts)
 				})
 			} else {
-				stencil.syncLocalAndRemoteBranches(repoPath, host, view, function(err, result){
+				stencil.syncBranch(repoPath, host, view, function(err, result){
 
 					util.keepNewCommitAndRemoveOldOne(postsMetaFilePath, function(){
 
@@ -737,7 +737,7 @@ function newPost(title, groupName, hashedPublicKey, tag, postContent, view, call
 		    					console.log('para:' + repoPath + ":" + view + '.')
 		    					console.log('change branch err ' + err)
 		    				}
-		    				console.log('Current branch ' + stencil.getCurrentBranch(repoPath))
+		    				console.log('Current branch ' + stencil.getCurrentBranchName(repoPath))
 			    			util.getJSONFileContentLocally(rulesFilePath, function(rules) {
 			    				var filteredPosts = util.filterPosts(masterViewPosts, rules.filterKeyWords)
 

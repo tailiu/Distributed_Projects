@@ -166,7 +166,7 @@ function createOrUpdateMesageLogContent(userID, content, repoPath, option, callb
 	createTmpFile(fileDir, JSON.stringify(content), function(filePath) {
 		stencil.createFileInTorrent(filePath, function(filemeta) {
 			var messageLogMetaPath = getFilePathInRepo(repoPath, messageLogMeta)
-			stencil.createOrUpdateFileInRepo(messageLogMetaPath, JSON.stringify(filemeta), option, function(retry) {
+			stencil.writeFileToRepo(messageLogMetaPath, JSON.stringify(filemeta), option, function(retry) {
 				callback(retry)
 			})
 		})
@@ -389,7 +389,7 @@ function createTeamOrChannel(userID, serverAddr, email, description, readableNam
 	//there is only one that can work.....
 	cloneRepo(userID, name, serverAddr)
 	
-	stencil.createOrUpdateFileInRepo(metaPath, JSON.stringify(metaPutInInRepo), 'create', function() {
+	stencil.writeFileToRepo(metaPath, JSON.stringify(metaPutInInRepo), 'create', function() {
 
 		var memListInRepo = []
 		memListInRepo[0] = {}
@@ -406,7 +406,7 @@ function createTeamOrChannel(userID, serverAddr, email, description, readableNam
 		
 		var memListPath = getFilePathInRepo(repoPath, memListFile)
 
-		stencil.createOrUpdateFileInRepo(memListPath, JSON.stringify(memListInRepo), 'create', function() {
+		stencil.writeFileToRepo(memListPath, JSON.stringify(memListInRepo), 'create', function() {
 
 			var reposFilePath = getFilePathInUserIDDir(userID, reposFile)
 
@@ -443,7 +443,7 @@ function createTeamOrChannel(userID, serverAddr, email, description, readableNam
 
 					stencil.putValueOnDHT(localDHTNode, DHTSeed, name, metaPutOnDHT, function() {
 
-						stencil.createOrUpdateFileInRepo(publicKeyPath, publicKey, 'create', function() {
+						stencil.writeFileToRepo(publicKeyPath, publicKey, 'create', function() {
 							if (option == 'private channel') {
 								createOrUpdateMesageLogContent(userID, [], repoPath, 'create', function() {
 									callback()
@@ -616,7 +616,7 @@ function addContentToJSONFileInRepo(filePath, addedContent, callback) {
 		option = 'update'
 	}
 
-	stencil.createOrUpdateFileInRepo(filePath, JSON.stringify(content), 'create', function() {
+	stencil.writeFileToRepo(filePath, JSON.stringify(content), 'create', function() {
 		callback()
 	})
 }
@@ -909,13 +909,13 @@ function appendToMemList(teamNameOrChannelName, userID, newMem, callback) {
 	if (content == undefined) {
 		var members = []
 		members.push(newMem)
-		stencil.createOrUpdateFileInRepo(memListPath, JSON.stringify(members), 'create', function() {
+		stencil.writeFileToRepo(memListPath, JSON.stringify(members), 'create', function() {
 			callback()
 		})
 	} else {
 		var members = JSON.parse(content)
 		members.push(newMem)
-		stencil.createOrUpdateFileInRepo(memListPath, JSON.stringify(members), 'update', function() {
+		stencil.writeFileToRepo(memListPath, JSON.stringify(members), 'update', function() {
 			callback()
 		})
 	}
@@ -933,7 +933,7 @@ function addMember(name, moderatorHashedPublicKey, newMem, SSHPublicKey, newMemH
 
 		var adminRepoDir = getAdminReposDir(moderatorHashedPublicKey, serverAddr)
 		var repoName = getRepoNameFromTeamOrChannelName(name)
-		stencil.addKeyAndUpdateConfigFileInAdminRepo(adminRepoDir, SSHPublicKey, newMemHashedPublicKey, repoName)
+		stencil.addKeyToRepo(adminRepoDir, SSHPublicKey, newMemHashedPublicKey, repoName)
 		
 		var serverAddrWithoutUserAccount = getServerAddrWithoutUserAccount(serverAddr)
 		var knownHostKey = stencil.getKnownHostKey(serverAddrWithoutUserAccount)
@@ -1193,7 +1193,7 @@ app.post('/processAndResToJoinReq', function(req, res) {
 	}
 
 	if (found) {
-		stencil.createOrUpdateFileInRepo(invitationMetaFilePath, JSON.stringify(fileContent), 'update', function() {
+		stencil.writeFileToRepo(invitationMetaFilePath, JSON.stringify(fileContent), 'update', function() {
 			if (username != undefined) {
 				processJoinTeamReq(username, hashedInviteePublicKey, SSHPublicKey, flatName, moderatorHashedPublicKey, inviteeEmail, function(err, serverAddr, knownHostKey, generalChannelFlatName) {
 					if (err != null) {

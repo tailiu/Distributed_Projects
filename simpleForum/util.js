@@ -192,7 +192,7 @@ exports.createOrUpdatePosts = function(groupName, userID, content, option, view,
 	createTmpFile(fileDir, JSON.stringify(content), function(filePath) {
 		stencil.createFileInTorrent(filePath, seedClient, function(filemeta) {
 			var postsMetaFilePath = getFilePathInRepo(repoPath, postsMetaFile)
-			stencil.createOrUpdateFileInRepo(postsMetaFilePath, JSON.stringify(filemeta), option, host, view, function(err) {
+			stencil.writeFileToRepo(postsMetaFilePath, JSON.stringify(filemeta), option, host, view, function(err) {
 				callback(err)
 			})
 		})

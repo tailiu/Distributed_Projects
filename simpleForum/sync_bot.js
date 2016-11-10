@@ -26,7 +26,7 @@ function lockAndUpdateFile() {
 
 		stencil.changeBranch(repoPath, view, function(err) {
 			if (err == null) {
-				stencil.syncLocalAndRemoteBranches(repoPath, host, view, function(err, result) {
+				stencil.syncBranch(repoPath, host, view, function(err, result) {
 					if (err == null) {
 						//If new changes are fetched, update the downloaded posts
 						if (result.indexOf('Already up-to-date') == -1) {

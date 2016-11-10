@@ -57,7 +57,7 @@ function pushToRemoteBranch(posts, callback) {
 					})
 				} else {
 					//If there is some other guy who pushes before me, just keep his version...
-					stencil.syncLocalAndRemoteBranches(repoPath, host, view, function(err, result) {
+					stencil.syncBranch(repoPath, host, view, function(err, result) {
 						util.keepNewCommitAndRemoveOldOne(postsMetaFilePath, function() {
 
 							var req = {}
