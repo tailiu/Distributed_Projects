@@ -206,24 +206,6 @@ function handleErr(err) {
   }
 }
 
-function getAdminRepoPath(adminRepoDir) {
-  return adminRepoDir + '/' + adminRepo
-}
-
-function getConfFilePath(adminRepoDir) {
-  return adminRepoDir + confDir + confFile
-}
-
-exports.createRepo = function(adminRepoDir, repoName, addedkeyName, host) {
-  var adminRepoPath = getAdminRepoPath(adminRepoDir)
-  var confFilePath = getConfFilePath(adminRepoDir)
-  var data = 'repo ' + repoName + '\n' + 'RW+ = ' + addedkeyName + '\n'
-  var command = 'cd ' + adminRepoPath + '\ngit add -A :/\ngit commit -m "' + 'add repo ' + repoName + '"\n'
-        + 'git push ' + host + ' master\n'
-  fs.appendFileSync(confFilePath, data)
-  childProcess.execSync(command)
-}
-
 function addRemote(repoPath, host, repoName) {
   var command = 'cd ' + repoPath + '\ngit remote add ' + host + ' '  + host + ':' + repoName + '\n'
   childProcess.execSync(command)
@@ -242,7 +224,7 @@ function addEntryToConfig(remoteAdminRepoServer, keyName, host) {
   }
 }
 
-function cloneRepoWithSpecificBranch(remoteRepoLocation, localRepoDir, host, keyName, branch, type) {
+function cloneRepo(remoteRepoLocation, localRepoDir, host, keyName, branch, type) {
   mkdirp.sync(localRepoDir)
 
   addEntryToConfig(remoteRepoLocation.split(':')[0], keyName, host)
@@ -270,8 +252,8 @@ function cloneRepoWithSpecificBranch(remoteRepoLocation, localRepoDir, host, key
   addRemote(localRepoDir + '/' + repoName, host, repoName)
 }
 
-exports.cloneRepoWithSpecificBranch = function(remoteRepoLocation, localRepoDir, host, keyName, branch) {
-  cloneRepoWithSpecificBranch(remoteRepoLocation, localRepoDir, host, keyName, branch, 'host in config')
+exports.cloneRepo = function(remoteRepoLocation, localRepoDir, host, keyName, branch) {
+  cloneRepo(remoteRepoLocation, localRepoDir, host, keyName, branch, 'host in config')
 }
 
 function replaceKey(adminRepoDir, keyName) {
@@ -310,15 +292,45 @@ function replaceKey(adminRepoDir, keyName) {
   childProcess.execSync(command)
 }
 
-exports.setUpAdminRepoLocally = function(remoteAdminRepoServer, localAdminRepoDir, keyName, host) {
-  var localAdminRepoPath = localAdminRepoDir + '/' + adminRepo
-  var remoteAdminRepoPath = remoteAdminRepoServer + ':' + adminRepo
+function getLocalAdminRepoPath(adminRepoDir) {
+  return adminRepoDir + '/' + adminRepo
+}
+
+function getConfFilePath(adminRepoDir) {
+  return adminRepoDir + confDir + confFile
+}
+
+function getRemoteAdminRepoPath(adminRepoDir) {
+  return adminRepoDir + ':' + adminRepo
+}
+
+function setUpAdminRepoLocally(remoteAdminRepoServer, localAdminRepoDir, keyName, host) {
+  var localAdminRepoPath = getLocalAdminRepoPath(localAdminRepoDir)
+  var remoteAdminRepoPath = getRemoteAdminRepoPath(remoteAdminRepoServer)
 
   if (!fs.existsSync(localAdminRepoPath)) {
-    cloneRepoWithSpecificBranch(remoteAdminRepoPath, localAdminRepoDir, host, keyName, 'all', 'remote location')
+    cloneRepo(remoteAdminRepoPath, localAdminRepoDir, host, keyName, 'all', 'remote location')
     replaceKey(localAdminRepoDir, keyName)
   }
 }
+
+exports.createRepo = function(localAdminRepoDir, repoName, keyName, host, remoteAdminRepoServer) {
+  if (remoteAdminRepoServer == undefined) {
+    var adminRepoPath = getLocalAdminRepoPath(localAdminRepoDir)
+    var confFilePath = getConfFilePath(localAdminRepoDir)
+    var data = 'repo ' + repoName + '\n' + 'RW+ = ' + keyName + '\n'
+    var command = 'cd ' + adminRepoPath + '\ngit add -A :/\ngit commit -m "' + 'add repo ' + repoName + '"\n'
+          + 'git push ' + host + ' master\n'
+    fs.appendFileSync(confFilePath, data)
+    childProcess.execSync(command)
+  } else {
+    setUpAdminRepoLocally(remoteAdminRepoServer, localAdminRepoDir, keyName, host)
+  }
+}
+
+
+
+
 
 function updateConfig(adminRepoDir, repoName, keyName, host) {
   var conFilePath = adminRepoDir + confDir + confFile
@@ -448,16 +460,6 @@ exports.createBranch = function(repoPath, branchName, callback) {
   }
 }
 
-exports.changeBranch = function(repoPath, branchName, callback) {
-  try {
-    var command = 'cd ' + repoPath + '\ngit checkout ' +  branchName + '\n'
-    childProcess.execSync(command)
-    callback(null)
-  } catch (err) {
-    callback(handleErr(err))
-  }
-}
-
 exports.mergeBranch = function(repoPath, branchName, callback) {
   try {
     var command = 'cd ' + repoPath + '\ngit merge ' + branchName + '\n'
@@ -474,14 +476,23 @@ exports.getCurrentBranchName = function(repoPath) {
   return result
 }
 
-exports.checkoutToBranchFirstTime = function(repoPath, remote, localBranch, remoteBranch, callback) {
+exports.changeBranch = function(repoPath, branchName, remote, callback) {
   try {
-    var command = 'cd ' + repoPath + '\n'
-    command += 'git fetch --all\n'
-    command += 'git checkout -b ' + localBranch + ' --track ' + remote + '/' + remoteBranch + '\n'
+    var command = 'cd ' + repoPath + '\ngit checkout ' +  branchName + '\n'
     childProcess.execSync(command)
     callback(null)
   } catch (err) {
-    callback(handleErr(err))
+    var errMsg = handleErr(err)
+    if (errMsg.indexOf('did not match any file(s) known to git') != -1) {
+      checkoutToBranchFirstTime(repoPath, remote, branchName, branchName)
+    }
+    callback(errMsg)
   }
+}
+
+function checkoutToBranchFirstTime(repoPath, remote, localBranch, remoteBranch) {
+  var command = 'cd ' + repoPath + '\n'
+  command += 'git fetch --all\n'
+  command += 'git checkout -b ' + localBranch + ' --track ' + remote + '/' + remoteBranch + '\n'
+  childProcess.execSync(command)
 }

@@ -24,7 +24,7 @@ function lockAndUpdateFile() {
 	process.send(process.pid + ' sync bot, tries to lock branch ' + branchLockFilePath)
 	util.lock(branchLockFilePath, function(releaseBranchLock) {
 
-		stencil.changeBranch(repoPath, view, function(err) {
+		stencil.changeBranch(repoPath, view, undefined, function(err) {
 			if (err == null) {
 				stencil.syncBranch(repoPath, host, view, function(err, result) {
 					if (err == null) {

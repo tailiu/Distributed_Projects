@@ -216,12 +216,12 @@ function getWorkerLocalDHTPort(pid) {
 	return portNum
 }
 
-function cloneRepoWithSpecificBranch(userID, groupName, serverAddr, branch) {
+function cloneRepo(userID, groupName, serverAddr, branch) {
 	var host = util.getHost(userID, groupName)
 	var clonedRepoDir = util.getClonedReposDir(userID)
 	var remoteRepoLocation = getRemoteRepoLocation(groupName, serverAddr)
 
-	stencil.cloneRepoWithSpecificBranch(remoteRepoLocation, clonedRepoDir, host, userID, branch) 
+	stencil.cloneRepo(remoteRepoLocation, clonedRepoDir, host, userID, branch) 
 }
 
 function getSignature(value, privateKey) {
@@ -371,7 +371,7 @@ function joinGroup(username, hashedPublicKey, groupName, members, callback) {
 			var serverAddrWithoutUserAccount = getServerAddrWithoutUserAccount(serverAddr)
 			stencil.checkAndAddKnownHostKey(serverAddrWithoutUserAccount, knownHostKey)
 
-			cloneRepoWithSpecificBranch(hashedPublicKey, groupName, serverAddr, 'all')
+			cloneRepo(hashedPublicKey, groupName, serverAddr, 'all')
 
 			var downloadReqID = util.createRandom()
 
@@ -428,11 +428,11 @@ function createGroup(groupName, description, userID, serverAddr, username, callb
 	var host = util.getHost(userID, groupName)
 
 	var adminRepoDir = getAdminReposDir(userID, serverAddr)
-	stencil.setUpAdminRepoLocally(serverAddr, adminRepoDir, userID, host)
+	stencil.createRepo(adminRepoDir, undefined, userID, host, serverAddr)
 
 	stencil.createRepo(adminRepoDir, groupName, userID, host)
 
-	cloneRepoWithSpecificBranch(userID, groupName, serverAddr, 'all')
+	cloneRepo(userID, groupName, serverAddr, 'all')
 
 	var repoPath = util.getClonedRepoPath(groupName, userID)
 
@@ -579,7 +579,7 @@ function createBranchView(userID, groupName, view, filterKeyWords, callback) {
 						releaseMasterViewPostsLock()
 						var filteredPosts = util.filterPosts(masterViewPosts, filterKeyWords)
 					
-						stencil.changeBranch(repoPath, view, function(err) {
+						stencil.changeBranch(repoPath, view, undefined, function(err) {
 							var uploadReqID = util.createRandom()
 
 							var req = {}
@@ -718,7 +718,7 @@ function newPost(title, groupName, hashedPublicKey, tag, postContent, view, call
 	util.lock(branchLockFilePath, function(releaseBranchLock) {
 		console.log('Post new messages, ' + process.pid + ' response bot tries to lock ' + masterViewPostsFilePath)
 		util.lock(masterViewPostsFilePath, function(releaseMasterFileLock) {
-			stencil.changeBranch(repoPath, masterView, function(err) {
+			stencil.changeBranch(repoPath, masterView, undefined, function(err) {
 				var newOne = {}
 				newOne.creator = hashedPublicKey
 				newOne.ts = new Date()
@@ -732,7 +732,7 @@ function newPost(title, groupName, hashedPublicKey, tag, postContent, view, call
 		    		releaseMasterFileLock()
 
 		    		if (view != masterView) {
-		    			stencil.changeBranch(repoPath, view, function(err) {
+		    			stencil.changeBranch(repoPath, view, undefined, function(err) {
 		    				if (err != null) {
 		    					console.log('para:' + repoPath + ":" + view + '.')
 		    					console.log('change branch err ' + err)
@@ -773,40 +773,34 @@ function changeCurrentView(userID, groupName, chosenView, callback) {
 
 	console.log('change view ' + process.pid + ' response bot locks branch')
 	util.lock(branchLockFilePath, function(releaseBranchLock) {
-		stencil.changeBranch(repoPath, chosenView, function(err) {
+		stencil.changeBranch(repoPath, chosenView, host, function(err) {
 			if (err == null) {
 				console.log('response bot ' + process.pid + 'not change to branch first time, release branch lock')
 				releaseBranchLock()
 				callback()
 			} else if (err.indexOf('did not match any file(s) known to git') != -1) {
-				stencil.checkoutToBranchFirstTime(repoPath, host, chosenView, chosenView, function(err) {
-					if (err != null) {
-						console.log('checkout to branch first time err' + err)
+				var downloadReqID = util.createRandom()
+
+				var req = {}
+				req.type = 'download'
+				req.groupName = groupName
+				req.userID = userID
+				req.view = chosenView
+				req.id = downloadReqID
+
+				process.send(req)
+
+				process.on('message', function(msg) {
+
+					if (msg.type == 'Download Succeeded' && msg.id == downloadReqID) {
+						createBotReq(userID, groupName, chosenView, undefined, 'sync', function(err) {
+							console.log('response bot ' + process.pid + 'change to branch first time, release branch lock')
+							releaseBranchLock()
+							callback()
+						})
 					}
-
-					var downloadReqID = util.createRandom()
-
-					var req = {}
-					req.type = 'download'
-					req.groupName = groupName
-					req.userID = userID
-					req.view = chosenView
-					req.id = downloadReqID
-
-					process.send(req)
-
-					process.on('message', function(msg) {
-
-						if (msg.type == 'Download Succeeded' && msg.id == downloadReqID) {
-							createBotReq(userID, groupName, chosenView, undefined, 'sync', function(err) {
-								console.log('response bot ' + process.pid + 'change to branch first time, release branch lock')
-								releaseBranchLock()
-								callback()
-							})
-						}
-					})
-
 				})
+
 			} else {
 				console.log('response bot ' + process.pid + ' not change to branch first time nor change to branch first time, release branch lock')
 				releaseBranchLock()

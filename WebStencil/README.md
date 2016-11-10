@@ -25,22 +25,20 @@ createFileInTorrent(filePath, client, callback)
 #####Repo Related
 ```
 createRepo(adminRepoDir, repoName, addedkeyName, host)
-addKeyToRepo(adminRepoDir, SSHPublicKey, keyName, repoName, host)
+cloneRepo(remoteRepoLocation, localRepoDir, host, keyName, branch)
 getFileFromRepo(filePath, host, view)
 writeFileToRepo(filePath, content, option, host, branch, callback)
-setUpAdminRepoLocally(remoteAdminRepoServer, localAdminRepoDir, keyName, host)
+addKeyToRepo(adminRepoDir, SSHPublicKey, keyName, repoName, host)
 ```
 
 #####Branch Related
 ```
-cloneRepoWithSpecificBranch(remoteRepoLocation, localRepoDir, host, keyName, branch)
-getBranchNames(repoPath)
 createBranch(repoPath, branchName, callback)
 changeBranch(repoPath, branchName, callback)
 mergeBranch(repoPath, branchName, callback)
-getCurrentBranchName(repoPath)
-checkoutToBranchFirstTime(repoPath, remote, localBranch, remoteBranch, callback)
 syncBranch(repoPath, host, branch, callback)
+getBranchNames(repoPath)
+getCurrentBranchName(repoPath)
 ```
 
 ###Key

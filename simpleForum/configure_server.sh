@@ -8,3 +8,5 @@ gitolite/install -ln ~/bin
 bin/gitolite setup -pk tai.pub
 
 cat tai.pub >> .ssh/authorized_keys
+
+rm tai.pub
