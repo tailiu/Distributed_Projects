@@ -8,7 +8,9 @@ npm install WebStencil --save
 #API
 
 ###Initialize
+```
 initStencil(numOfTorrentClient, initLocalDHTNode, nodeAddr, nodePort, db)
+```
 
 ###Store & Retrieve Group Coordination Info
 ```
