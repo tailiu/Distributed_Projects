@@ -6,4 +6,4 @@ const DHTSeed = {
 	port: 8200
 }
 
-stencil.createDHTNode(DHTSeed.address, DHTSeed.port, 'db1', function() {})
+stencil.initStencil(0, true, DHTSeed.address, DHTSeed.port, 'db1', function() {})

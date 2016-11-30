@@ -1,0 +1,48 @@
+doctype html
+html(lang="en")
+    head
+        title Piazza -- The New Way to Q&A, For classrooms
+        style
+            include ../style/addNewClass.css
+            include ../style/common.css
+        script(src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js")
+    body.
+        <div id="header">
+            <h1>Piazza</h1>
+        </div>
+        <p id="user"></p>
+        <div id="content">
+            <h1 id="schoolName"></h1>
+            <p><a href="http://localhost:3000/changeSchool">(change school)</a><p>
+            Selected Term:  
+                <select name="term" id="selectTerm" form="addNewClassForm">
+                <option value="winter_2017">Winter 2017</option>
+                <option value="spring_2017">Spring 2017</option>
+                <option value="summer_2017">Summer 2017</option>
+                <option value="autumn_2017">Autumn 2017</option>
+                <option value="winter_2018">Winter 2018</option>
+                <option value="spring_2018">Spring 2018</option>
+                <option value="summer_2018">Summer 2018</option>
+                <option value="autumn_2018">Autumn 2018</option>
+            </select><br>
+            <div id="addNewClass">
+                <form method="post" class='form' id='addNewClassForm' action="http://localhost:3000/addNewClass">
+                    <p>Class Name: <input type="text" name="className" value=""></p>
+                    <p>Class Number: <input type="text" name="classNumber" value=""></p>
+                    <p>Server Address to Store Class Data:</p>
+                    <p><input type="text" name="serverAddr" value="" placeholder="git@github.com"></p>
+                    Join as: <input type="radio" name="role" value="professor"> Professor
+                    <input type="radio" name="role" value="TA"> TA <br><br>
+                    <input type="hidden" name="schoolName" value="">
+                    <input type="hidden" name="username" value="">
+                    <input type="hidden" name="hashedPublicKey" value="">
+                    <input type="submit" name="button" value="Create Class"><br>
+                </form>
+            </div>
+        </div>
+    script
+        |schoolName = !{schoolName};
+        |username = !{username};
+        |hashedPublicKey = !{hashedPublicKey};
+        include ../script/classCommon.js
+        include ../script/addNewClass.js

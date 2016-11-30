@@ -1,0 +1,52 @@
+#content {
+	position: absolute;
+	top: 20%;
+	width: 100%;
+	font-size: 20px;
+    text-align: center;
+}
+
+#addOrSearchClass {
+	position: absolute;
+	top: 100%;
+	left: 22%;
+	width: 50%;
+	border: solid 2px rgb(218, 231, 239);
+	border-radius: 10px;
+	background-color: rgb(255, 255, 255);
+	padding: 20px;
+}
+
+#searchClassForm input[type=submit] {
+	width: 150px;
+	font-size: 18px;
+}
+
+#searchClassForm input[type=text] {
+	width: 200px;
+	font-size: 18px;
+}
+
+#addClassForm input[type=submit] {
+	width: 230px;
+	font-size: 18px;
+}
+
+#selectTerm {
+	border:1px solid;
+	font-size: 16px;
+	border-radius: 5px;
+}
+
+a:link {
+	text-decoration: none;
+	color: black;
+}
+
+a:hover {
+    border-bottom: 1px solid;
+}
+
+a:visited { 
+    color: black;
+}

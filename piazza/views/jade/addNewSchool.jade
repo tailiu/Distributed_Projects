@@ -1,0 +1,27 @@
+doctype html
+html(lang="en")
+    head
+        title Piazza -- The New Way to Q&A, For classrooms
+        style
+            include ../style/common.css
+            include ../style/addNewSchool.css
+        script(src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js")
+    body.
+        <div id="header">
+            <h1>Piazza</h1>
+        </div>
+        <div id="content">
+            <h1>Create a New School</h1>
+            <div id="addNewSchool">
+                <form method="post" class='form' id='addNewSchoolForm' action="http://localhost:3000/addNewSchool">
+                    School Name: <input type="text" name="schoolName" value="" placeholder="e.g., My University"><br><br>
+                    <div id="emailDomain"> 
+                        Email Domain: <input type="text" name="emailDomain" value="" placeholder="e.g., myuniversity.edu"><br><br>
+                    </div>
+                    <input type="checkbox" name="haveEmailDomain" value="f"> My school does not have its own email domain.<br><br>
+                    <input type="submit" name="button" value="Continue">
+                </form>
+            </div>
+        </div>
+    script
+        include ../script/addNewSchool.js

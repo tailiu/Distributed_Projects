@@ -251,7 +251,7 @@ function addContentToJSONFileLocally(filePath, addedContent, callback) {
 
 //Notice: I have not added verification of data on the DHT!!!!!!!!
 function getGroupInfoOnDHT(groupName, callback) {
-	stencil.getValueFromDHT(localDHTNode, DHTSeed, groupName, function(metaOnDHT) {
+	stencil.retrieveGroupInfo(localDHTNode, DHTSeed, groupName, function(metaOnDHT) {
 		callback(metaOnDHT)
 	})
 }
@@ -487,7 +487,7 @@ function createGroup(groupName, description, userID, serverAddr, username, callb
 							var branchLockFilePath = util.getBranchLockFilePath(userID, groupName)
 							util.createJSONFileLocally(branchLockFilePath, [], function(){
 
-								stencil.putValueOnDHT(localDHTNode, DHTSeed, groupName, metaPutOnDHT, function() {
+								stencil.storeGroupInfo(localDHTNode, DHTSeed, groupName, metaPutOnDHT, function() {
 									callback()
 								})
 							})
@@ -907,8 +907,11 @@ if (cluster.isMaster) {
 		once the previous one is dead because of some reasons.
 
 	*/
-	var seedClient = stencil.createTorrentClient()
-	var downloadClient = stencil.createTorrentClient()
+
+	var init = stencil.initStencil(2, false)
+
+	var seedClient = init.torrentClient[0]
+	var downloadClient = init.torrentClient[1]
 
 	for (var i = 0; i < numResponseBots; i++) {
         startResponseBot()
@@ -930,6 +933,8 @@ if (cluster.isMaster) {
 	*/
 
 	var httpServer = http.createServer(app)
+	httpServer.listen(httpListeningPort)
+	console.log(process.pid + ' is listening at port %d', httpListeningPort)
 
 	process.once('SIGINT', function(){
 		process.exit(1)
@@ -939,12 +944,8 @@ if (cluster.isMaster) {
 		process.exit(1)
 	})
 
-	stencil.createDHTNode(localDHTNodeAddr, getWorkerLocalDHTPort(process.pid), getWorkerLocalDHTNodeDB(process.pid), function(node) {
-		localDHTNode = node
-
-		httpServer.listen(httpListeningPort)
-		console.log(process.pid + ' is listening at port %d', httpListeningPort)
-	})
+	var init = stencil.initStencil(0, true, localDHTNodeAddr, getWorkerLocalDHTPort(process.pid), getWorkerLocalDHTNodeDB(process.pid))
+	localDHTNode = init.DHTNode
 
 	app.post('/changeCurrentView', function(req, res) {
 		var groupName = req.body.groupName

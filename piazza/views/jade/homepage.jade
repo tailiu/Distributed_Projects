@@ -1,0 +1,39 @@
+doctype html
+html(lang="en")
+    head
+        title(id="title")
+        style
+            include ../style/homepage.css
+        script(src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js")
+    body.
+        <div id="header">
+            <h3 id="piazza">Piazza</h3>
+            <h4 id="class"></h4>
+            <h4 id="QA">Q&A</h4>
+            <h4 id="management">Manage Class</h4>
+            <h4 id="account"></h4>
+        </div>
+        <div id="content">
+            <div id="tags">
+                <p>hw1 &nbsp hw2  &nbsp hw3 &nbsp hw4 &nbsp hw5 &nbsp hw6 &nbsp hw7 &nbsp hw8 &nbsp hw9 &nbsp hw10 &nbsp extra &nbsp midterm &nbsp final</p>
+            </div>
+            <div id="newPostOrSearchPost">
+                <button onclick="newPost()" id="newPostButton">New Post</button>
+                <form id="search">
+                    <input type="text" name="keywords" value="" placeholder="Search Post.....">
+                </form>
+            </div>
+            <div id="postOutline">
+            </div>
+            <div id="postContent">
+            </div>
+        </div>
+    script
+        |schoolName = !{schoolName};
+        |username = !{username};
+        |hashedPublicKey = !{hashedPublicKey};
+        |classNumber = !{classNumber};
+        |term = !{term};
+        |className = !{className};
+        |role = !{role};
+        include ../script/homepage.js
