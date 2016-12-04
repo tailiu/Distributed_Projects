@@ -1,0 +1,85 @@
+<html>
+	<head>
+		<title id="title"></title>
+		<link rel="stylesheet" href="views/style/Q&A.css">
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js"></script>
+    </head>
+	<body>
+		<div id="header">
+			<h3 id="piazza">Piazza</h3>
+			<h4 id="class">CS1001</h4>
+			<h4 id="QA">Q&A</h4>
+			<h4 id="management">Manage Class</h4>
+			<h4 id="account">Tai</h4>
+		</div>
+		<div id="content">
+			<div id="tags">
+				<p>hw1 &nbsp hw2  &nbsp hw3 &nbsp hw4 &nbsp hw5 &nbsp hw6 &nbsp hw7 &nbsp hw8 &nbsp hw9 &nbsp hw10 &nbsp extra &nbsp midterm &nbsp final</p>
+			</div>
+			<div id="newPostOrSearchPost">
+				<button onclick="myFunction()" id="newPostButton">New Post</button>
+				<form id="search">
+					<input type="text" name="keywords" value="" placeholder="Search Post.....">
+				</form>
+			</div>
+			<div id="postsSummary">
+				<p class="oneSummary"><span class="summaryTitle">The best way to get answers</span ><span class="summaryDate">12/16/2017</span><br><span class="summaryContent">Ask questions on Piazza rather than emailing your teaching staff so everyone can benefit from the response (and so you can get answers from classmates who are up as late as you are).</span><img src="views/photos/note.jpg"></img></p>
+				<p class="oneSummary"><span class="summaryTitle">The best way to get answers</span ><span class="summaryDate">12/16/2017</span><br><span class="summaryContent">Ask questions on Piazza rather than emailing your teaching staff so everyone can benefit from the response (and so you can get answers from classmates who are up as late as you are).</span><img src="views/photos/question.jpg"></img></p>
+				<p class="oneSummary"><span class="summaryTitle">The best way to get answers</span ><span class="summaryDate">12/16/2017</span><br><span class="summaryContent">Ask questions on Piazza rather than emailing your teaching staff so everyone can benefit from the response (and so you can get answers from classmates who are up as late as you are).</span><img src="views/photos/question.jpg"></img></p>
+				<p class="oneSummary"><span class="summaryTitle">The best way to get answers</span ><span class="summaryDate">12/16/2017</span><br><span class="summaryContent">Ask questions on Piazza rather than emailing your teaching staff so everyone can benefit from the response (and so you can get answers from classmates who are up as late as you are).</span><img src="views/photos/instructor.jpg"></img></p>
+				<p class="oneSummary"><span class="summaryTitle">The best way to get answers</span ><span class="summaryDate">12/16/2017</span><br><span class="summaryContent">Ask questions on Piazza rather than emailing your teaching staff so everyone can benefit from the response (and so you can get answers from classmates who are up as late as you are).</span><img src="views/photos/student.jpg"></img></p>
+				<p class="oneSummary"><span class="summaryTitle">The best way to get answers</span ><span class="summaryDate">12/16/2017</span><br><span class="summaryContent">Ask questions on Piazza rather than emailing your teaching staff so everyone can benefit from the response (and so you can get answers from classmates who are up as late as you are).</span><img src="views/photos/unsolved_question.jpg"></img></p>
+			</div>
+			<div id="postContent">
+				<section class="oneMsg">
+					<header class="msgHeader"><img src="views/photos/question.jpg" align="top"></img>&nbspquestion</header>
+					<p class="msg"><span class="msgTitle">Hash table<br></span><span class="msgContent">I find that the book says that worst case <br>running time of deletion in the hash table with chaining is O(1).<br>Can anybody explain it?</p><br></span>
+					<footer class="msgFooter"><button onclick="editMsg()">edit</button><span>Updated 11mins by Tai Liu</span></footer>
+				</section>
+				<section class="discussion">
+					<header class="discussionHeader"><b>followup discussions &nbsp</b><i>for lingering questions and comments</i></header>
+					<section class="oneFollowupDiscussion">
+						<div class="discussionState">
+							<input type='radio' name='state1' value='resolved'>Resolved
+			    			<input type='radio' name='state1' value='unresolved'>Unresolved
+			    		</div>
+			    		<p><span class="discussionPerson"><img src="views/photos/instructor.jpg" align="top">&nbspBoris</span><span class="discussionDate">&nbsp 11 months ago</span></p>
+			    		<p class="discussionContent">so sorting is a NP problem since its not a decision problem?</p>
+			    		<section class="discussing">
+			    			<p><span class="discussionPerson">Boris</span><span class="discussionDate">&nbsp 11 months ago</span></p>
+			    			<p class="discussionContent">so sorting is a NP problem since its not a decision problem?</p>
+			    		</section>
+			    		<section class="discussing">
+			    			<p><span class="discussionPerson">Boris</span><span class="discussionDate">&nbsp 11 months ago</span></p>
+			    			<p class="discussionContent">so sorting is a NP problem since its not a decision problem?</p>
+			    		</section>
+			    		<input type="text" name="replyToFollowupDiscussion" value="" placeholder="Reply to this followup discussion">
+					</section>
+					<section class="oneFollowupDiscussion">
+						<div class="discussionState">
+							<input type='radio' name='state2' value='resolved'>Resolved
+			    			<input type='radio' name='state2' value='unresolved'>Unresolved
+			    		</div>
+			    		<p><span class="discussionPerson">Boris</span><span class="discussionDate">&nbsp 11 months ago</span></p>
+			    		<p class="discussionContent">so sorting is a NP problem since its not a decision problem?</p>
+			    		<section class="discussing">
+			    			<p><span class="discussionPerson">Boris</span><span class="discussionDate">&nbsp 11 months ago</span></p>
+			    			<p class="discussionContent">so sorting is a NP problem since its not a decision problem?</p>
+			    		</section>
+			    		<section class="discussing">
+			    			<p><span class="discussionPerson">Boris</span><span class="discussionDate">&nbsp 11 months ago</span></p>
+			    			<p class="discussionContent">so sorting is a NP problem since its not a decision problem?</p>
+			    		</section>
+			    		<section class="discussing">
+			    			<p><span class="discussionPerson">Boris</span><span class="discussionDate">&nbsp 11 months ago</span></p>
+			    			<p class="discussionContent">so sorting is a NP problem since its not a decision problem?</p>
+			    		</section>
+			    		<input type="text" name="replyToFollowupDiscussion" value="" placeholder="Reply to this followup discussion">
+					</section>
+					<footer class="discussionFooter"><p>Start a new followup discussion</p><input type="text" name="newFollowupDisscussion" value="" placeholder="Compose a new followup discussion"></footer>
+				</section>
+			</div>
+		</div>
+		<script src="views/script/homepage.js"></script>
+	</body>
+</html>

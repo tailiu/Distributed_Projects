@@ -6,4 +6,4 @@ const DHTSeed = {
 	port: 8200
 }
 
-stencil.initStencil(0, true, DHTSeed.address, DHTSeed.port, 'db1', function() {})
+stencil.initStencilHandler(DHTSeed.address, DHTSeed.port, 'db1')

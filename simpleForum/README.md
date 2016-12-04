@@ -1,6 +1,10 @@
 rmLongFiles.js, tai.pub, configure_server.sh and initialize.sh are used to 
 automate the initialization. They have nothing to do with application logic.
 
+app.js is used for master coordinator instance
+
+response_handler.js is used for response handler instance
+
 moderator_bot.js is used for moderator bot instance
 
 sync_bot.js is used for sync bot instance

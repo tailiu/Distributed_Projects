@@ -16,24 +16,18 @@ const SSHPkPath = '/home/' + findCurrentAccount() + '/.ssh/id_rsa.pub'
 const SSHKeysDir = '/home/' + findCurrentAccount() + '/.ssh/'
 const SSHConfig = '/home/' + findCurrentAccount() + '/.ssh/config'
 
-exports.initStencil = function(numOfTorrentClient, initLocalDHTNode, nodeAddr, nodePort, db) {
-  var init = {}
-  init.torrentClient = null
-  init.DHTNode = null
-
-  if (numOfTorrentClient >= 1) {
-    init.torrentClient = []
-    var i
-    for (i = 0; i < numOfTorrentClient; i++) { 
-      init.torrentClient[i] = createTorrentClient()
-    }
+exports.initStencil = function(numOfTorrentClient) {
+  var torrentClient = []
+  
+  for (i = 0; i < numOfTorrentClient; i++) { 
+    torrentClient[i] = createTorrentClient()
   }
+  
+  return torrentClient
+}
 
-  if (initLocalDHTNode) {
-    init.DHTNode = createDHTNode(nodeAddr, nodePort, db)
-  }
-
-  return init
+exports.initStencilHandler = function(nodeAddr, nodePort, db) {
+  return createDHTNode(nodeAddr, nodePort, db)
 }
 
 function createTorrentClient() {

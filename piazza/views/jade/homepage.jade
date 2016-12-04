@@ -3,7 +3,7 @@ html(lang="en")
     head
         title(id="title")
         style
-            include ../style/homepage.css
+            include ../style/Q&A.css
         script(src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js")
     body.
         <div id="header">
@@ -23,7 +23,7 @@ html(lang="en")
                     <input type="text" name="keywords" value="" placeholder="Search Post.....">
                 </form>
             </div>
-            <div id="postOutline">
+            <div id="postsSummary">
             </div>
             <div id="postContent">
             </div>
@@ -36,4 +36,5 @@ html(lang="en")
         |term = !{term};
         |className = !{className};
         |role = !{role};
+        |posts = !{posts};
         include ../script/homepage.js
