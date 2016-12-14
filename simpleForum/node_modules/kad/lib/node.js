@@ -113,9 +113,14 @@ Node.prototype.connect = function(contact, callback) {
 
   async.waterfall([
     this._ensureTransportState.bind(this),
-    this._router.updateContact.bind(this._router, seed),
+    function(next) {
+      self._router.updateContact(seed, function() {
+        next();
+      });
+    },
     this._router.findNode.bind(this._router, this._self.nodeID, {
-      aggressiveLookup: true
+      aggressiveLookup: true,
+      aggressiveCache: true
     }),
     this._router.refreshBucketsBeyondClosest.bind(this._router)
   ], function(err) {
@@ -379,6 +384,7 @@ Node.prototype._replicate = function() {
       return self._log.error('failed to parse value from %s', data.value);
     }
 
+    /* istanbul ignore else */
     // if we are not the publisher, then replicate every T_REPLICATE
     if (item.publisher !== self._self.nodeID) {
       self._putValidatedKeyValue(item, function(err) {
@@ -436,6 +442,7 @@ Node.prototype._expire = function() {
 
     if (Date.now() >= item.timestamp + constants.T_EXPIRE) {
       self._storage.del(data.key, function(err) {
+        /* istanbul ignore next */
         if (err) {
           self._log.error('failed to expire item at key %s', data.key);
         }

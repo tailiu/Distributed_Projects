@@ -7,6 +7,9 @@ var transports = require('../lib/transports');
 var Logger = require('../lib/logger');
 var AddressPortContact = require('../lib/contacts/address-port-contact');
 var FakeStorage = require('kad-memstore');
+var Router = require('../lib/router');
+
+Router.PING_TTL = 0;
 
 var storage1 = new FakeStorage();
 var storage2 = new FakeStorage();

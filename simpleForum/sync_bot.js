@@ -1,7 +1,7 @@
 const stencil = require('WebStencil')
 const util = require('./util')
 
-const syncCycle = 3000
+const syncCycle = util.getRandomByRange(8000, 10000)
 
 var userID = process.argv[2]
 var groupName = process.argv[3]

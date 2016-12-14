@@ -36,7 +36,7 @@ exports.createID = function(data) {
  * @returns {Buffer}
  */
 exports.hexToBuffer = function(hexString) {
-  var buf = new Buffer(constants.K);
+  var buf = new Buffer(constants.B / 8);
   buf.write(hexString, 0, 'hex');
   return buf;
 };
@@ -51,11 +51,11 @@ exports.getDistance = function(id1, id2) {
   assert(exports.isValidKey(id1), 'Invalid key supplied');
   assert(exports.isValidKey(id2), 'Invalid key supplied');
 
-  var distance = new Buffer(constants.K);
+  var distance = new Buffer(constants.B / 8);
   var id1Buf = exports.hexToBuffer(id1);
   var id2Buf = exports.hexToBuffer(id2);
 
-  for(var i = 0; i < constants.K; ++i) {
+  for(var i = 0; i < constants.B / 8; ++i) {
     distance[i] = id1Buf[i] ^ id2Buf[i];
   }
 

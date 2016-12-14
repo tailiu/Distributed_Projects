@@ -5,7 +5,8 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "init": "node rmLongFiles.js & ./initialize.sh "
+    "l": "node rmLongFilesLinux.js & ./initializeLinux.sh",
+    "m": "node rmLongFilesMac.js & ./initializeMac.sh"
   },
   "author": "Tai Liu",
   "license": "ISC",

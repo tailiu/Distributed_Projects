@@ -25,16 +25,16 @@ const adminReposDir = 'admin_repos'
 const groupMetaFile = 'group_meta'
 const memListFile = 'member_list'
 const uploadedFilesDir = 'uploaded_files'
-const defaultSSHKeysDir = '/home/'+ findCurrentAccount() + '/.ssh'
-const knownHostsPath = '/home/' + findCurrentAccount() + '/.ssh/known_hosts'
+const defaultSSHKeysDir = stencil.defaultSSHKeysDir
 
 const largestPortNum = 65536
 
-const localDHTNodeAddr = 'localhost'
+const localDHTNodeAddr = getLocalIpAddr()
 const localDHTNodeDBFilePart = 'db-p'
 const baseLocalDHTNodePort = 1025
 const DHTSeed = {
- 	address: '127.0.0.1',
+ 	address: '10.230.9.135',
+ 	//address: '127.0.0.1',
 	port: 8200
 }
 
@@ -74,13 +74,6 @@ app.use(bodyParser.urlencoded({     // to support URL-encoded bodies
 
 var localDHTNode
 var masterView = util.masterView
-
-//find current account on the machine
-function findCurrentAccount() {
-	var account = childProcess.execSync('whoami')
-	account = (account + '').replace(/(\r\n|\n|\r)/gm,"")
-	return account
-}
 
 function filterPosts(posts, tag) {
 	var filteredPosts = []
@@ -163,6 +156,8 @@ function createUser(username, callback) {
 	localUserMeta.ts = new Date()
 	localUserMeta.username = username
 
+	stencil.addKeyToSSHAgent(hashedPublicKey)
+
 	fs.writeFile(hashedPublicKey + '/' + usermetaFile, JSON.stringify(localUserMeta), function(err) {
 		callback(hashedPublicKey)
 	})
@@ -187,8 +182,16 @@ function getUserKeysDir(userID) {
 }
 
 function getLocalIpAddr() {
-  var networkInterfaces = os.networkInterfaces( )
-  return networkInterfaces.eth0[0].address
+	var interfaces = os.networkInterfaces()
+
+	for (var k1 in interfaces) {
+	    for (var k2 in interfaces[k1]) {
+	        var address = interfaces[k1][k2];
+	        if (address.family === 'IPv4' && !address.internal) {
+	            return address.address
+	        }
+	    }
+	}
 }
 
 function getAdminReposDir(userID, serverAddr) {
@@ -295,6 +298,15 @@ function appendToMemList(groupName, userID, newMem, view, callback) {
 
 }
 
+function checkAndReplaceWithIPAddr(serverAddr) {
+	var host = serverAddr.split('@')[1]
+	var user = serverAddr.split('@')[0]
+	if (host === 'localhost') {
+		host = getLocalIpAddr()
+	}
+	return user + '@' + host
+}
+
 function addMember(groupName, newMem, SSHPublicKey, newMemHashedPublicKey, moderatorID, callback) {
 	appendToMemList(groupName, moderatorID, newMem, masterView, function() {
 		var repoPath = util.getClonedRepoPath(groupName, moderatorID)
@@ -303,6 +315,8 @@ function addMember(groupName, newMem, SSHPublicKey, newMemHashedPublicKey, moder
 		var host = util.getHost(moderatorID, groupName)
 
 		stencil.addKeyToRepo(adminRepoDir, SSHPublicKey, newMemHashedPublicKey, groupName, host)
+
+		serverAddr = checkAndReplaceWithIPAddr(serverAddr)
 
 		var serverAddrWithoutUserAccount = getServerAddrWithoutUserAccount(serverAddr)
 		var knownHostKey = stencil.getKnownHostKey(serverAddrWithoutUserAccount)
@@ -425,6 +439,10 @@ function sendPages(res, data, type) {
 
 function createGroup(groupName, description, userID, serverAddr, username, callback) {
 	var host = util.getHost(userID, groupName)
+
+	var serverAddrWithoutUserAccount = getServerAddrWithoutUserAccount(serverAddr)
+	var knownHostKey = stencil.getKnownHostKey(serverAddrWithoutUserAccount)
+	stencil.checkAndAddKnownHostKey(serverAddrWithoutUserAccount, knownHostKey)
 
 	var adminRepoDir = getAdminReposDir(userID, serverAddr)
 	stencil.createRepo(adminRepoDir, undefined, userID, host, serverAddr)

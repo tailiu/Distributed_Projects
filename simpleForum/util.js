@@ -5,6 +5,7 @@ const mkdirp = require('mkdirp')
 const lineByLine = require('n-readlines') 
 const lockfile = require('proper-lockfile') 
 const _ = require('underscore')
+const childProcess = require('child-proc')
 
 const clonedReposDir = 'cloned_repos'
 const downloadedFilesDir = 'downloaded_files'
@@ -72,7 +73,7 @@ function getJSONFileContentLocally(filePath, callback) {
 }
 
 function lock(filePath, callback) {
-	var backoffTime = _.random(0, 5000)
+	var backoffTime = _.random(0, 1000)
 
 	lockfile.lock(filePath, function(err, release) {
 		if (err) {
@@ -101,6 +102,10 @@ function getFileDirFromFilePath(path, fileName) {
 exports.masterView = masterView
 
 exports.postsMetaFile = postsMetaFile
+
+exports.getRandomByRange = function(min, max) {
+	return _.random(min, max)
+}
 
 exports.getRulesFilePath = function(userID, groupName) {
 	var clonedRepoPath = getClonedRepoPath(groupName, userID)

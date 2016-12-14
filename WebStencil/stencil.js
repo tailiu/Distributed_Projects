@@ -6,15 +6,30 @@ var os = require('os')
 var lineByLine = require('n-readlines')
 var mkdirp = require('mkdirp')
 var _ = require('underscore')
+var crypto = require('crypto')
 
+const SSHDirPath = getSSHDirBaseAddr() + findCurrentAccount()
 const adminRepo = 'gitolite-admin'
 const confDir = '/gitolite-admin/conf/'
 const confFile = 'gitolite.conf'
 const keyDir = '/gitolite-admin/keydir/'
-const knownHostsPath = '/home/' + findCurrentAccount() + '/.ssh/known_hosts'
-const SSHPkPath = '/home/' + findCurrentAccount() + '/.ssh/id_rsa.pub'
-const SSHKeysDir = '/home/' + findCurrentAccount() + '/.ssh/'
-const SSHConfig = '/home/' + findCurrentAccount() + '/.ssh/config'
+const knownHostsPath = SSHDirPath + '/.ssh/known_hosts'
+const SSHPkPath = SSHDirPath + '/.ssh/id_rsa.pub'
+const SSHKeysDir = SSHDirPath + '/.ssh/'
+const SSHConfig = SSHDirPath + '/.ssh/config'
+const defaultSSHKeysDir = SSHDirPath + '/.ssh'
+
+exports.defaultSSHKeysDir = defaultSSHKeysDir
+
+function getSSHDirBaseAddr() {
+  var platform = process.platform
+
+  if (platform == 'linux') {
+    return '/home/'
+  } else if (platform == 'darwin') {
+    return '/Users/'
+  }
+}
 
 exports.initStencil = function(numOfTorrentClient) {
   var torrentClient = []
@@ -69,8 +84,16 @@ function findCurrentAccount() {
 }
 
 function getLocalIpAddr() {
-  var networkInterfaces = os.networkInterfaces( )
-  return networkInterfaces.eth0[0].address
+  var interfaces = os.networkInterfaces()
+
+  for (var k1 in interfaces) {
+      for (var k2 in interfaces[k1]) {
+          var address = interfaces[k1][k2];
+          if (address.family === 'IPv4' && !address.internal) {
+              return address.address
+          }
+      }
+  }
 }
 
 exports.syncBranch = function(repoPath, host, branch, callback) {
@@ -318,6 +341,11 @@ function getRemoteAdminRepoPath(adminRepoDir) {
   return adminRepoDir + ':' + adminRepo
 }
 
+exports.addKeyToSSHAgent = function(keyName) {
+  var command = 'ssh-add ' + SSHKeysDir + keyName + '\n'
+  childProcess.execSync(command)
+}
+
 function setUpAdminRepoLocally(remoteAdminRepoServer, localAdminRepoDir, keyName, host) {
   var localAdminRepoPath = getLocalAdminRepoPath(localAdminRepoDir)
   var remoteAdminRepoPath = getRemoteAdminRepoPath(remoteAdminRepoServer)
@@ -423,18 +451,44 @@ exports.getServerAddr = function(repoPath) {
   return getServerAddrFromConfig(remoteOriginUrl.toString().split(':')[0]) 
 }
 
+//generate key to be put to the known_hosts file in the .ssh dir
+function genKnownHostsKey(ipaddr) {
+  var knownHostsKey
+  var command
+  var serverPk = childProcess.execSync('cat /etc/ssh/ssh_host_ecdsa_key.pub')
+  var buffer = crypto.randomBytes(20)
+  var token = buffer.toString('base64');
+  command = 'key=`echo ' + token + ' | base64 -d | xxd -p`\n'
+  command += 'echo -n \"' + ipaddr + '\" | openssl sha1 -mac HMAC -macopt hexkey:$key|awk \'{print $2}\' | xxd -r -p|base64\n'
+  var hashedVal = childProcess.execSync(command)
+  hashedVal = (hashedVal + '').replace(/(\r\n|\n|\r)/gm,"")
+  knownHostsKey = '|1|' + token + '|' + hashedVal + ' ' + serverPk
+  return knownHostsKey
+}
+
 exports.getKnownHostKey = function(serverAddrWithoutUserAccount) {
-  var command = 'ssh-keygen -F ' + serverAddrWithoutUserAccount + '\n'
-  var value = childProcess.execSync(command)
-  var key = value.toString().split('\n')[1]
-  return key + '\n'
+  try {
+    var command = 'ssh-keygen -F ' + serverAddrWithoutUserAccount + '\n'
+    var value = childProcess.execSync(command)
+    if (value.toString() == '') {
+      return genKnownHostsKey(serverAddrWithoutUserAccount)
+    }
+    var key = value.toString().split('\n')[1]
+    return key + '\n'
+  } catch (err) {
+    return genKnownHostsKey(serverAddrWithoutUserAccount)
+  }
 }
 
 exports.checkAndAddKnownHostKey = function(serverAddrWithoutUserAccount, knownHostsKey) {
   if (fs.existsSync(knownHostsPath)) {
-      var checkKnownHosts = 'ssh-keygen -F ' + serverAddrWithoutUserAccount
-      var checkResult = childProcess.execSync(checkKnownHosts)
-      if (checkResult.toString() == null) {
+      try {
+        var checkKnownHosts = 'ssh-keygen -F ' + serverAddrWithoutUserAccount
+        var checkResult = childProcess.execSync(checkKnownHosts)
+        if (checkResult.toString() == '') {
+          fs.appendFileSync(knownHostsPath, knownHostsKey)
+        }
+      } catch (err) {
         fs.appendFileSync(knownHostsPath, knownHostsKey)
       }
   } else {
