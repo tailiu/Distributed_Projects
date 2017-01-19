@@ -1,0 +1,42 @@
+doctype html
+html(lang="en")
+    head
+        title Piazza -- The New Way to Q&A, For classrooms
+        style
+            include ../style/selectClass.css
+            include ../style/common.css
+        script(src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js")
+    body.
+        <div id="header">
+            <h1>Piazza</h1>
+        </div>
+        <div id="content">
+            <h1 id="schoolName"></h1>
+            <p><a href="http://localhost:3000/changeSchool">(change school)</a><p>
+            Selected Term:  
+                <select name="term" id="selectTerm" form="addOrSearchClass">
+                <option value="winter_2017">Winter 2017</option>
+                <option value="spring_2017">Spring 2017</option>
+                <option value="summer_2017">Summer 2017</option>
+                <option value="autumn_2017">Autumn 2017</option>
+                <option value="winter_2018">Winter 2018</option>
+                <option value="spring_2018">Spring 2018</option>
+                <option value="summer_2018">Summer 2018</option>
+                <option value="autumn_2018">Autumn 2018</option>
+            </select><br>
+            <div id="addOrSearchClass">
+                <p>Search Class:</p>
+                <form method="post" class='form' id='searchClassForm' action="http://localhost:3000/searchClass">
+                    <input type="text" name="class" value="">
+                    <input type="submit" name="button" value="Search">
+                </form>
+                <p>or</p>
+                <form method="post" class='form' id='addClassForm' action="http://localhost:3000/addClass">
+                    <input type="submit" name="button" value="Add New Class">
+                </form>
+            </div>
+        </div>
+    script
+        |schoolName = !{schoolName};
+        |emailDomain = !{emailDomain};
+        include ../script/classCommon.js

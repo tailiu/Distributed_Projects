@@ -1,0 +1,19 @@
+#content {
+	position: absolute;
+	top: 15%;
+	width: 100%;
+	font-size: 20px;
+    text-align: center;
+}
+
+#addOrSearchSchool {
+	position: absolute;
+	top: 110%;
+	left: 25%;
+	width: 50%;
+	border: solid 2px rgb(218, 231, 239);
+	border-radius: 10px;
+	background-color: rgb(255, 255, 255);
+	padding: 20px;
+}
+

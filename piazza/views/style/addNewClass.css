@@ -1,0 +1,51 @@
+#content {
+	position: absolute;
+	top: 13%;
+	width: 100%;
+	font-size: 20px;
+    text-align: center;
+}
+
+#addNewClass {
+	position: absolute;
+	top: 100%;
+	left: 22%;
+	width: 50%;
+	border: solid 2px rgb(218, 231, 239);
+	border-radius: 10px;
+	background-color: rgb(255, 255, 255);
+	padding: 20px;
+}
+
+#addNewClassForm input[type=submit] {
+	width: 200px;
+	font-size: 18px;
+}
+
+#selectTerm {
+	border:1px solid;
+	font-size: 16px;
+	border-radius: 5px;
+}
+
+#user {
+	position: absolute;
+	top: 1%;
+	right: 2%;
+	font-size: 27px;
+	font-style: italic;
+	font-weight: 600;
+}
+
+a:link {
+	text-decoration: none;
+	color: black;
+}
+
+a:hover {
+    border-bottom: 1px solid;
+}
+
+a:visited { 
+    color: black;
+}

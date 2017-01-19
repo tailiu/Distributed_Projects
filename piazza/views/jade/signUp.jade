@@ -1,0 +1,26 @@
+doctype html
+html(lang="en")
+    head
+        title Piazza -- The New Way to Q&A, For classrooms
+        style
+            include ../style/signUp.css
+            include ../style/common.css
+        script(src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js")
+    body.
+        <div id="header">
+            <h1>Piazza</h1>
+        </div>
+        <div id="content">
+            <h1>Sign Up</h1>
+            <div id="signUp">
+                <form method="post" class='form' id='signUpForm' action="http://localhost:3000/signUp">
+                    <input type="hidden" name="schoolName" value="">
+                    Enter Your Email: <input type="text" name="email" value=""><br><br>
+                    Enter Your Name: <input type="text" name="username" value=""><br><br><br>
+                    <input type="submit" name="signUp" value="Sign Up!">
+                </form>
+            </div>
+        </div>
+    script
+        |schoolName = !{schoolName};
+        include ../script/signUp.js

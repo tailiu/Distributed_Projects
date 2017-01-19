@@ -1,0 +1,102 @@
+<html>
+	<head>
+		<title id="title"></title>
+		<link rel="stylesheet" href="views/style/Q&A.css">
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js"></script>
+    </head>
+	<body>
+		<div id="header">
+			<h3 id="piazza">Piazza</h3>
+			<h4 id="class">CS1001</h4>
+			<h4 id="QA">Q&A</h4>
+			<h4 id="management">Manage Class</h4>
+			<h4 id="account">Tai</h4>
+		</div>
+		<div id="content">
+			<div id="tags">
+				<p>hw1 &nbsp hw2  &nbsp hw3 &nbsp hw4 &nbsp hw5 &nbsp hw6 &nbsp hw7 &nbsp hw8 &nbsp hw9 &nbsp hw10 &nbsp extra &nbsp midterm &nbsp final</p>
+			</div>
+			<div id="newPostOrSearchPost">
+				<button onclick="myFunction()" id="newPostButton">New Post</button>
+				<form id="search">
+					<input type="text" name="keywords" value="" placeholder="Search Post.....">
+				</form>
+			</div>
+			<div id="postsSummary">
+					<p class="oneSummary"><span id="title">The best way to get answers</span ><span id="date">12/16/2017</span><br><span id="content">Ask questions on Piazza rather than emailing your teaching staff so everyone can benefit from the response (and so you can get answers from classmates who are up as late as you are).</span></p>
+					<p class="oneSummary"><span id="title">The best way to get answers</span ><span id="date">12/16/2017</span><br><span id="content">Ask questions on Piazza rather than emailing your teaching staff so everyone can benefit from the response (and so you can get answers from classmates who are up as late as you are).</span></p>
+					<p class="oneSummary"><span id="title">The best way to get answers</span ><span id="date">12/16/2017</span><br><span id="content">Ask questions on Piazza rather than emailing your teaching staff so everyone can benefit from the response (and so you can get answers from classmates who are up as late as you are).</span></p>
+					<p class="oneSummary"><span id="title">The best way to get answers</span ><span id="date">12/16/2017</span><br><span id="content">Ask questions on Piazza rather than emailing your teaching staff so everyone can benefit from the response (and so you can get answers from classmates who are up as late as you are).</span></p>
+					<p class="oneSummary"><span id="title">The best way to get answers</span ><span id="date">12/16/2017</span><br><span id="content">Ask questions on Piazza rather than emailing your teaching staff so everyone can benefit from the response (and so you can get answers from classmates who are up as late as you are).</span></p>
+			</div>
+			<div id="postContent">
+				<form id='newPostForm' action='http://localhost:3000/newPost' method='post'>
+					<table>
+						<tr>
+							<th>Post Type</th>
+    				 		<td>
+		    					<input type='radio' name='postType' value='question'>Question &nbsp &nbsp
+		    					<input type='radio' name='postType' value='note'>Note &nbsp &nbsp
+		    					<input type='radio' name='postType' value='poll'>Poll/In-Class Response
+		    				</td>
+		    			</tr>
+		    			<tr>
+		    				<th>Post to</th>
+    						<td>
+		    					<input type='radio' name='postTo' value='everyone'>Entire Class &nbsp
+		    					<input type='radio' name='postTo' value='instructors'>Instructors
+		    				</td>
+		    			</tr>
+		    			<tr>
+		    				<th>Select Tag(s)</th>
+    						<td>
+		    					<input type='checkbox' name='tags' value='hw1'>hw1
+			    				<input type='checkbox' name='tags' value='hw2'>hw2
+			    				<input type='checkbox' name='tags' value='hw3'>hw3
+			    				<input type='checkbox' name='tags' value='hw4'>hw4
+			    				<input type='checkbox' name='tags' value='hw5'>hw5
+			    				<input type='checkbox' name='tags' value='hw6'>hw6
+			    				<input type='checkbox' name='tags' value='hw7'>hw7
+			    				<input type='checkbox' name='tags' value='hw8'>hw8
+			    				<input type='checkbox' name='tags' value='hw9'>hw9
+			    				<input type='checkbox' name='tags' value='hw10'>hw10
+			    				<input type='checkbox' name='tags' value='extra'>extra
+			    				<input type='checkbox' name='tags' value='midterm'>midterm
+			    				<input type='checkbox' name='tags' value='final'>final
+			    			</td>
+			    		</tr>
+			    		<tr>
+			    			<th>Summary</th>
+    						<td>
+    							<input type='text' name='summary' value='' placeholder='Enter a one line summary....'>
+    						</td>
+    					</tr>
+    					<tr>
+    						<th id="postDetails">Details</th>
+    						<td>
+    				 			<textarea rows="20" cols="50" name="postContent"></textarea>
+    				 		</td>
+    				 	</tr>
+    				 	<tr>
+    				 		<th>Show my name as </th>
+    						<td>
+			    				<select name="showMyNameAs">
+									<option value="username">tai</option>
+									<option value="AnonymousToClassmates">Anonymous to Classmates</option>
+									<option value="AnonymousToEveryone">Anonymous to Everyone</option>
+								</select>
+							</td>
+						</tr>
+						<tr>
+							<th></th>
+							<td>
+   								<input type='submit' name='post' value='Post My Question'>
+   							</td>
+   						</tr>
+   					</table>
+   				</form>
+			</div>
+		</div>
+		<script src="views/script/homepage.js"></script>
+	</body>
+</html>
