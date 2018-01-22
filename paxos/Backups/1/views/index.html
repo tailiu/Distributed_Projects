@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Paxos Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="">
+    <meta name="author" content="">
+    <!-- Le styles -->
+    <link href="/stylesheets/bootstrap.css" rel="stylesheet">
+    <style type="text/css">
+      body {
+        padding-top: 60px; /* 60px to make the container go all the way to the bottom of the topbar */
+      }
+      
+      pre {
+        overflow-x: auto;
+        white-space: pre;
+        word-wrap: normal;
+      }
+      
+      .form-inline h3,
+      .well h3 {
+        margin-bottom: 10px;
+      }
+    </style>
+    <link href="/stylesheets/bootstrap-responsive.css" rel="stylesheet">
+    <!-- Le HTML5 shim, for IE6-8 support of HTML5 elements -->
+    <!--[if lt IE 9]>
+      <script src="http://html5shim.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    
+    <script id="peerNav" type="text/x-jquery-tmpl">
+      <li><a data-toggle="tab" href="#peer-${port}">Server ${port}</a></li>
+    </script>
+    
+    <script id="peerContent" type="text/x-jquery-tmpl">
+      <div class="tab-pane fade" id="peer-${port}">
+        <div class="row">
+          <div class="span12">
+            <div class="well">
+              <h3>Controls</h3>
+                <button class="btn btn-danger" id="kill-${port}">Kill</button>
+                <button class="btn btn-success" id="revive-${port}">Revive</button>
+                <form class="form-inline pull-right" id="set-probability-${port}">
+                  <input type="text" name="probability" class="input-small" placeholder="0.0">
+                  <button type="submit" class="btn">Set Drop Probability</button>
+                </form>
+            </div>
+          </div>
+        </div>
+        <div class="row">
+          <div class="span12">
+            <form class="well form-inline" id="client-submit-${port}">
+              <h3>Store Value</h3>
+              <div class="control-group">
+                <input type="text" name="name" class="input-small" placeholder="Name">
+                <input type="text" name="value" class="input-small" placeholder="Value">
+                <button type="submit" class="btn">Submit</button>
+                <span class="help-inline"></span>
+              </div>
+            </form>
+          </div>
+        </div>
+        <div class="row">
+          <div class="span12">
+            <form class="well form-inline" id="client-fetch-${port}">
+              <h3>Fetch Value</h3>
+              <div class="control-group">
+                <input type="text" name="name" class="input-small" placeholder="Name">
+                <input type="text" name="instance" class="input-small" placeholder="Instance">
+                <button type="submit" class="btn">Fetch</button>
+                <span class="help-inline"></span>
+              </div>
+            </form>
+          </div>
+        </div>
+        <div class="row">
+          <div class="span12">
+            <div class="well">
+              <h3>Log for ${port}</h3>
+              <pre id="port-${port}-log" class="log"></pre>
+            </div>
+          </div>
+        </div>
+      </div>
+    </script>
+    
+    
+  </head>
+  <body>
+    <div class="container">
+      <div class="row">
+        <div class="span12">
+          <ul class="nav nav-tabs" id="peer-tabs-nav">
+            <li class="active"><a data-toggle="tab" href="#home">Home</a></li>
+          </ul>
+           
+          <div class="tab-content" id="peer-tabs-content">
+            <div class="tab-pane fade in active" id="home">
+              <div class="row">
+                <div class="span12">
+                  
+                </div>
+              </div>
+              <div class="row">
+                <div class="span12">
+                  <div class="well">
+                    <h3>Log</h3>
+                    <pre id="all-log" class="log"></pre>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          </ul>
+        </div>
+      </div>
+    </div> <!-- /container -->
+    <!-- Le javascript
+    ================================================== -->
+    <!-- Placed at the end of the document so the pages load faster -->
+    <script src="/js/jquery.js"></script>
+    <script type="text/javascript" src="http://ajax.microsoft.com/ajax/jquery.templates/beta1/jquery.tmpl.js"></script>
+    <script src="/js/bootstrap-transition.js"></script>
+    <script src="/js/bootstrap-alert.js"></script>
+    <script src="/js/bootstrap-modal.js"></script>
+    <script src="/js/bootstrap-dropdown.js"></script>
+    <script src="/js/bootstrap-scrollspy.js"></script>
+    <script src="/js/bootstrap-tab.js"></script>
+    <script src="/js/bootstrap-tooltip.js"></script>
+    <script src="/js/bootstrap-popover.js"></script>
+    <script src="/js/bootstrap-button.js"></script>
+    <script src="/js/bootstrap-collapse.js"></script>
+    <script src="/js/bootstrap-carousel.js"></script>
+    <script src="/js/bootstrap-typeahead.js"></script>
+    <script type="text/javascript" src="/js/underscore.js"></script>   
+    <script type="text/javascript" src="/js/underscore.string.js"></script>
+    
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+      var socket = io.connect('http://localhost');
+      var portSockets = {};
+      socket.on('setup', function (data) {
+        var ports = data.ports;
+        _.each(ports, function(port) {
+            var portSocket = io.connect("/" + port);
+            
+            portSocket.on('log', function(args) {
+                var output = _.map(args, function(arg) {
+                   return _.isString(arg) ? arg : JSON.stringify(arg);
+                }).join(" ");
+                
+                var allLog = $("#all-log")
+                var logSoFar = allLog.text();
+                var newLog = logSoFar + "\r\n" + output;
+                allLog.text(newLog.trim());
+                
+                var portLog = $("#port-" + port + "-log");
+                var portLogSoFar = portLog.text();
+                var newPortLog = portLogSoFar + "\r\n" + output;
+                portLog.text(newPortLog.trim());
+                
+                console.log.apply(console, args);
+            });
+            
+            portSockets[port] = portSocket;
+            
+            var nav = $("#peerNav").tmpl({port: port});
+            var content = $("#peerContent").tmpl({port: port});
+            
+            $("#peer-tabs-nav").append($(nav));
+            $("#peer-tabs-content").append($(content));
+            
+            $("#client-submit-" + port).submit(function(e) {
+              e.preventDefault();
+              
+              var name = $("#client-submit-" + port + " input[name='name']").val();
+              var value = $("#client-submit-" + port + " input[name='value']").val();
+              
+              if (!name || !value) {
+                alert("Need to set both name and value");
+                return;
+              }
+              
+              var form = $(this);
+              portSocket.emit("store", {name: name, value: value}, function(resp) {
+                
+                var control = $(".control-group", form);
+                var help = $(".help-inline", form);
+                
+                var text = "";
+                if (resp.accepted) {
+                  control.addClass("success");
+                  control.removeClass("error");
+                  
+                  text = "Stored: (" + value + ", " + resp.instance + ")";
+                }
+                else {
+                  control.removeClass("success");
+                  control.addClass("error");
+                  
+                  text = "Error: " + JSON.stringify(resp);
+                }
+                
+                help.text(text);
+              });
+            });
+            
+            $("#client-fetch-" + port).submit(function(e) {
+              e.preventDefault();
+              
+              var name = $("#client-fetch-" + port + " input[name='name']").val();
+              var instance = $("#client-fetch-" + port + " input[name='instance']").val();
+              
+              if (!name || !instance) {
+                alert("Need to set both name and instance");
+                return;
+              }
+              
+              var form = $(this);
+              portSocket.emit("fetch", {name: name, instance: instance}, function(resp) {
+                
+                var control = $(".control-group", form);
+                var help = $(".help-inline", form);
+                
+                var text = "";
+                if (resp.found) {
+                  control.addClass("success");
+                  control.removeClass("error");
+                  
+                  text = "Found: " + resp.value;
+                }
+                else {
+                  control.removeClass("success");
+                  control.addClass("error");
+                  
+                  text = "Not Found";
+                  if (resp.message) {
+                    text += ": " + resp.message;
+                  }
+                }
+                
+                help.text(text);
+              });
+            });
+
+            $("#kill-" + port).click(function(e) {
+              e.preventDefault();
+              
+              portSocket.emit("kill");
+            });
+
+            $("#revive-" + port).click(function(e) {
+              e.preventDefault();
+              
+              portSocket.emit("revive");
+            });
+
+            $("#set-probability-" + port).submit(function(e) {
+              e.preventDefault();
+              
+              var probability = parseFloat($("input[name='probability']", $(this)).val() || 0.0);
+              
+              portSocket.emit("probability", probability);
+            });
+        });
+      });
+    </script>
+  </body>
+</html>
